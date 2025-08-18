@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Photo Gallery</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1 class="title">Photo Gallery</h1>
+    <button id="uploadButton" class="primary-btn">Upload Photo</button>
+    <div id="gallery" class="gallery"></div>
+  </div>
+
+  <!-- Modal overlay for uploading -->
+  <div id="modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="uploadTitle">
+      <h2 id="uploadTitle">Upload Photo</h2>
+      <form id="uploadForm">
+        <label for="token">Upload token</label>
+        <input type="password" id="token" name="token" placeholder="Your secret token" required>
+        <label for="photo">Select image</label>
+        <input type="file" id="photo" name="photo" accept=".jpg,.jpeg,.png,.gif,.webp" required>
+        <div class="actions">
+          <button type="submit" class="primary-btn">Upload</button>
+          <button type="button" id="cancelUpload" class="secondary-btn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  photoapp:
+    build: .
+    image: photoapp:latest
+    container_name: photoapp
+    # Map the host photos directory into the container so uploads persist
+    volumes:
+      - /srv/photos:${PHOTO_DIR:-/srv/photos}
+    ports:
+      - "3000:3000"
+    environment:
+      # The directory inside the container where photos are stored. This should
+      # match the host bind mount above.
+      - PHOTO_DIR=/srv/photos
+      # Set these secrets via an `.env` file or directly in the environment.
+      # Replace the token below with a long random secret.
+      - UPLOAD_TOKEN=change_me_in_production
+      - PORT=3000
+      - MAX_FILE_BYTES=10485760

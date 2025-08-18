@@ -1,0 +1,28 @@
+[Unit]
+Description=Node.js Photo App
+After=network.target
+
+[Service]
+Type=simple
+# Run as a dedicated user for security. Create this user separately and
+# ensure it has read/write access to PHOTO_DIR.
+User=photoapp
+Group=photoapp
+
+# Working directory where the application code resides
+WorkingDirectory=/opt/photoapp
+
+# Load environment variables from an external file. Do not store secrets in
+# the unit file itself. Place this file at /opt/photoapp/.env with
+# appropriate permissions (600).
+EnvironmentFile=/opt/photoapp/.env
+
+# Limit Node.js memory usage to avoid exhausting memory on small VPSes.
+ExecStart=/usr/bin/env node --max-old-space-size=128 server.js
+
+# Restart on failure
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
