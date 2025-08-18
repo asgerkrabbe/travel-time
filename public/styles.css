@@ -1,96 +1,140 @@
-/*
- * Basic styles for the photo gallery. The aim is to be lightweight and
- * responsive without relying on any heavy frameworks. Colors are kept
- * unobtrusive to allow the photos themselves to stand out.
- */
+/* Refreshed styles for the photo gallery. This theme introduces a modern, subtle aesthetic with system fonts, gradient backgrounds and an accessible color palette. The design remains lightweight and fully responsive. */
+
+:root {
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --text: #333333;
+  --accent: #007bff;
+  --accent-hover: #0056d2;
+  --shadow: rgba(0, 0, 0, 0.1);
+  --toast-bg: rgba(50, 50, 50, 0.9);
+  --toast-error: #dc3545;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1117;
+    --surface: #1e2330;
+    --text: #e5e5e5;
+    --accent: #4d8cff;
+    --accent-hover: #2b6de8;
+    --shadow: rgba(0, 0, 0, 0.6);
+    --toast-bg: rgba(0, 0, 0, 0.8);
+    --toast-error: #d9534f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
   padding: 0;
-  font-family: Arial, Helvetica, sans-serif;
-  background-color: #f7f7f7;
-  color: #333;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  background: radial-gradient(circle at 0% 0%, rgba(0, 0, 0, 0.03), var(--bg));
+  min-height: 100vh;
 }
 
 .container {
-  max-width: 960px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 1rem 1.5rem;
 }
 
-.title {
-  text-align: center;
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 1rem;
 }
 
-.primary-btn,
-.secondary-btn {
-  padding: 0.5rem 1rem;
+.title {
+  display: flex;
+  align-items: center;
+  font-size: 1.75rem;
+  font-weight: 600;
+}
+
+.title .logo {
+  display: inline-flex;
+  margin-right: 0.5rem;
+  font-size: 1.5rem;
+  color: var(--accent);
+}
+
+.icon-btn {
+  background: var(--accent);
   border: none;
-  border-radius: 4px;
+  color: var(--surface);
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-size: 1rem;
+  transition: background 0.2s ease;
 }
 
-.primary-btn {
-  background-color: #007bff;
-  color: #ffffff;
+.icon-btn:hover,
+.icon-btn:focus {
+  background: var(--accent-hover);
 }
 
-.primary-btn:hover {
-  background-color: #0056b3;
-}
-
-.secondary-btn {
-  background-color: #6c757d;
-  color: #ffffff;
-  margin-left: 0.5rem;
-}
-
-.secondary-btn:hover {
-  background-color: #5a6268;
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 2px;
 }
 
 .gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  grid-gap: 12px;
-  margin-top: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
 }
 
 .gallery img {
   width: 100%;
   height: auto;
-  display: block;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 2px 5px var(--shadow);
+  object-fit: cover;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* Modal overlay styles */
+.gallery img:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
 .modal {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
+  display: none;
   align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.6);
   z-index: 1000;
 }
 
-.modal.hidden {
-  display: none;
+.modal:not(.hidden) {
+  display: flex;
 }
 
 .modal-content {
-  background-color: #ffffff;
+  background: var(--surface);
+  color: var(--text);
   padding: 1.5rem;
-  border-radius: 4px;
-  width: 90%;
-  max-width: 420px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 4px 10px var(--shadow);
 }
 
 .modal-content h2 {
@@ -99,39 +143,97 @@ body {
   font-size: 1.25rem;
 }
 
+.modal-content form > * + * {
+  margin-top: 0.75rem;
+}
+
 .modal-content label {
   display: block;
-  margin-top: 0.75rem;
-  font-weight: bold;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
 }
 
-.modal-content input[type="password"],
+.modal-content input[type="text"],
 .modal-content input[type="file"] {
   width: 100%;
-  margin-top: 0.25rem;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
 }
 
-.actions {
-  margin-top: 1.25rem;
+.modal-buttons {
   display: flex;
   justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 
-/* Toast notification */
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus {
+  background: var(--accent);
+  color: var(--surface);
+}
+
 .toast {
   position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: #333;
-  color: #fff;
+  bottom: 1rem;
+  right: 1rem;
+  background: var(--toast-bg);
+  color: var(--surface);
   padding: 0.75rem 1rem;
-  border-radius: 4px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px var(--shadow);
   opacity: 0;
-  transition: opacity 0.3s ease;
-  z-index: 2000;
+  transform: translateY(20px);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  z-index: 1001;
 }
 
 .toast.show {
   opacity: 1;
+  transform: translateY(0);
+}
+
+.toast.error {
+  background: var(--toast-error);
+  color: var(--surface);
+}
+
+@media (max-width: 600px) {
+  .gallery {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+  .icon-btn {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+  .title {
+    font-size: 1.5rem;
+  }
 }
