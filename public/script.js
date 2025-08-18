@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * Fetch the list of image filenames and render them into the gallery.
    */
   function loadGallery() {
-    fetch('/api/photos')
+    fetch('api/photos')
       .then(response => {
         if (!response.ok) {
           throw new Error('Failed to fetch photos');
@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
         galleryEl.innerHTML = '';
         files.forEach(file => {
           const img = document.createElement('img');
-          img.src = `/files/${encodeURIComponent(file)}`;
+          img.src = `files/${encodeURIComponent(file)}`;
           img.alt = file;
           img.loading = 'lazy';
           galleryEl.appendChild(img);
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const formData = new FormData();
     formData.append('photo', file);
-    fetch('/api/upload', {
+    fetch('api/upload', {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + token
