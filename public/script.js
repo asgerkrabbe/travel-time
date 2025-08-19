@@ -11,11 +11,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancelUpload = document.getElementById('cancelUpload');
   const uploadForm = document.getElementById('uploadForm');
   const toastEl = document.getElementById('toast');
+  const prefix = window.location.pathname.startsWith('/photos') ? '/photos' : '';
 
   // Fetch the list of image filenames and render them into the gallery.
   async function loadGallery() {
     try {
-      const response = await fetch('api/photos');
+      const response = await fetch(`${prefix}/api/photos`);
       if (!response.ok) {
         throw new Error('Failed to fetch photos');
       }
@@ -23,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
       galleryEl.innerHTML = '';
       files.forEach(file => {
         const img = document.createElement('img');
-        img.src = `files/${encodeURIComponent(file)}`;
+        img.src = `${prefix}/files/${encodeURIComponent(file)}`;
         img.alt = file;
         img.loading = 'lazy';
         galleryEl.appendChild(img);
@@ -47,15 +48,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 3000);
   }
 
-  function openModal() {
-    modalEl.setAttribute('aria-hidden', 'false');
-    document.getElementById('token').focus();
-  }
-
-  function closeModalFunc() {
-    modalEl.setAttribute('aria-hidden', 'true');
-    uploadForm.reset();
-  }
+function openModal() {
+  modalEl.classList.remove('hidden');
+  modalEl.setAttribute('aria-hidden', 'false');
+  document.getElementById('token').focus();
+}
+  
+function closeModalFunc() {
+  modalEl.classList.add('hidden');
+  modalEl.setAttribute('aria-hidden', 'true');
+  uploadForm.reset();
+}
 
   // Show modal on upload button click
   uploadButton.addEventListener('click', () => {
@@ -63,9 +66,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Hide modal on close and cancel click
-  closeModal.addEventListener('click', () => {
-    closeModalFunc();
-  });
+  if (closeModal) {
+  closeModal.addEventListener('click', closeModalFunc);
+  }
 
   cancelUpload.addEventListener('click', () => {
     closeModalFunc();
@@ -84,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const formData = new FormData();
     formData.append('photo', file);
-    fetch('api/upload', {
+    fetch(`${prefix}/api/upload`, {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + token
