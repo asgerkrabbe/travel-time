@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Photos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -47,6 +50,12 @@
           <button type="button" id="cancelUpload" class="btn btn-secondary">Cancel</button>
         </div>
       </form>
+    </div>
+  </div>
+  <div id="imageModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-content image-modal-content" role="dialog" aria-modal="true" aria-label="Image preview">
+      <button type="button" id="closeImageModal" class="close-btn" aria-label="Close image preview" title="Close">&times;</button>
+      <img id="modalImage" src="" alt="Preview" class="modal-image" />
     </div>
   </div>
   <script src="script.js"></script>

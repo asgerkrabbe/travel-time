@@ -12,6 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const uploadForm = document.getElementById('uploadForm');
   const toastEl = document.getElementById('toast');
   const prefix = window.location.pathname.startsWith('/photos') ? '/photos' : '';
+  const imageModal = document.getElementById('imageModal');
+  const closeImageModal = document.getElementById('closeImageModal');
+  const modalImage = document.getElementById('modalImage');
 
   // Fetch the list of image filenames and render them into the gallery.
   async function loadGallery() {
@@ -27,6 +30,13 @@ document.addEventListener('DOMContentLoaded', () => {
         img.src = `${prefix}/files/${encodeURIComponent(file)}`;
         img.alt = file;
         img.loading = 'lazy';
+        img.tabIndex = 0;
+        img.addEventListener('click', () => openImageModal(img.src, img.alt));
+        img.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            openImageModal(img.src, img.alt);
+          }
+        });
         galleryEl.appendChild(img);
       });
     } catch (err) {
@@ -48,17 +58,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 3000);
   }
 
-function openModal() {
-  modalEl.classList.remove('hidden');
-  modalEl.setAttribute('aria-hidden', 'false');
-  document.getElementById('token').focus();
-}
-  
-function closeModalFunc() {
-  modalEl.classList.add('hidden');
-  modalEl.setAttribute('aria-hidden', 'true');
-  uploadForm.reset();
-}
+  function openModal() {
+    modalEl.classList.remove('hidden');
+    modalEl.setAttribute('aria-hidden', 'false');
+    document.getElementById('token').focus();
+  }
+
+  function closeModalFunc() {
+    modalEl.classList.add('hidden');
+    modalEl.setAttribute('aria-hidden', 'true');
+    uploadForm.reset();
+  }
+
+  // Open image modal with the clicked image
+  function openImageModal(src, alt) {
+    modalImage.src = src;
+    modalImage.alt = alt || 'Preview';
+    imageModal.classList.remove('hidden');
+    imageModal.setAttribute('aria-hidden', 'false');
+    closeImageModal.focus();
+  }
+
+  // Close image modal
+  function closeImageModalFunc() {
+    imageModal.classList.add('hidden');
+    imageModal.setAttribute('aria-hidden', 'true');
+    modalImage.src = '';
+  }
 
   // Show modal on upload button click
   uploadButton.addEventListener('click', () => {
@@ -67,7 +93,7 @@ function closeModalFunc() {
 
   // Hide modal on close and cancel click
   if (closeModal) {
-  closeModal.addEventListener('click', closeModalFunc);
+    closeModal.addEventListener('click', closeModalFunc);
   }
 
   cancelUpload.addEventListener('click', () => {
@@ -109,6 +135,24 @@ function closeModalFunc() {
         const message = error && error.error ? error.error : 'Upload failed';
         showToast(message, true);
       });
+  });
+
+  // Close image modal on close button click
+  closeImageModal.addEventListener('click', closeImageModalFunc);
+
+  // Close image modal on click outside image
+  imageModal.addEventListener('click', e => {
+    if (e.target === imageModal) {
+      closeImageModalFunc();
+    }
+  });
+
+  // Close image modal on Escape key
+  document.addEventListener('keydown', event => {
+    if (imageModal.getAttribute('aria-hidden') === 'false' && event.key === 'Escape') {
+      event.preventDefault();
+      closeImageModalFunc();
+    }
   });
 
   // Global keyboard shortcuts: press 'u' to open the upload modal and 'Escape' to close it
