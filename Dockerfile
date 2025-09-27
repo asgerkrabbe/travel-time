@@ -6,6 +6,9 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Install build dependencies for sharp
+RUN apk add --no-cache --virtual .gyp python3 make g++
+
 # Copy package descriptors and install production dependencies
 COPY package.json package-lock.json* ./
 RUN npm install --production

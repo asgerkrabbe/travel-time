@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
+const sharp = require('sharp');
 require('dotenv').config();
 
 /*
@@ -24,6 +25,9 @@ const VALID_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 
 // Ensure the photo directory exists
 fs.mkdirSync(PHOTO_DIR, { recursive: true });
+// Ensure the thumbnail directory exists
+const THUMBS_DIR = path.join(PHOTO_DIR, 'thumbs');
+fs.mkdirSync(THUMBS_DIR, { recursive: true });
 
 const app = express();
 
@@ -150,8 +154,25 @@ app.get('/files/:name', (req, res) => {
   });
 });
 
+// Endpoint to serve thumbnails
+app.get('/files/thumbs/:name', (req, res) => {
+  const fileName = req.params.name;
+  const ext = path.extname(fileName).toLowerCase();
+  if (!VALID_EXTENSIONS.includes(ext)) {
+    return res.status(404).send('Not found');
+  }
+  const thumbPath = path.join(THUMBS_DIR, fileName);
+  fs.stat(thumbPath, (err, stats) => {
+    if (err || !stats.isFile()) {
+      return res.status(404).send('Not found');
+    }
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.sendFile(thumbPath);
+  });
+});
+
 // Upload endpoint. Requires a valid Bearer token in the Authorization header.
-app.post('/api/upload', uploadLimiter, upload.single('photo'), (req, res) => {
+app.post('/api/upload', uploadLimiter, upload.single('photo'), async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -174,13 +195,20 @@ app.post('/api/upload', uploadLimiter, upload.single('photo'), (req, res) => {
     }
     const newName = generateFilename(ext);
     const destPath = path.join(PHOTO_DIR, newName);
-    fs.writeFile(destPath, file.buffer, err => {
-      if (err) {
-        console.error('Error saving uploaded file:', err);
-        return res.status(500).json({ error: 'Failed to save file' });
-      }
-      return res.status(200).json({ success: true, filename: newName });
-    });
+    // Save original image
+    fs.writeFileSync(destPath, file.buffer);
+    // Generate and save thumbnail (300px wide, JPEG, quality 70)
+    const thumbPath = path.join(THUMBS_DIR, newName);
+    try {
+      await sharp(file.buffer)
+        .resize({ width: 300 })
+        .jpeg({ quality: 70 })
+        .toFile(thumbPath);
+    } catch (err) {
+      console.error('Error generating thumbnail:', err);
+      // Continue even if thumbnail fails
+    }
+    return res.status(200).json({ success: true, filename: newName });
   } catch (e) {
     console.error('Error handling upload:', e);
     return res.status(500).json({ error: 'Unexpected error during upload' });
