@@ -23,18 +23,41 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok) {
         throw new Error('Failed to fetch photos');
       }
-      const files = await response.json();
+      const payload = await response.json();
       galleryEl.innerHTML = '';
-      files.forEach(file => {
+      // Support two payload shapes:
+      // 1) ["file1.jpg", ...]
+      // 2) [{ original: "file1.jpg", thumb: "file1.thumb.jpg" | null }, ...]
+      const items = Array.isArray(payload)
+        ? (typeof payload[0] === 'string' || payload.length === 0
+            ? payload.map(p => ({ original: p, thumb: null }))
+            : payload)
+        : [];
+      items.forEach(item => {
+        const original = item && typeof item.original === 'string' ? item.original : String(item);
+        const thumb = item && typeof item.thumb === 'string' ? item.thumb : null;
         const img = document.createElement('img');
-        img.src = `${prefix}/files/${encodeURIComponent(file)}`;
-        img.alt = file;
+        // Prefer serving thumbnails; if API only returned originals, we can also
+        // request /files/thumbs by original name thanks to server-side mapping.
+        img.src = thumb
+          ? `${prefix}/files/thumbs/${encodeURIComponent(thumb)}`
+          : `${prefix}/files/thumbs/${encodeURIComponent(original)}`;
+        img.alt = original;
         img.loading = 'lazy';
         img.tabIndex = 0;
-        img.addEventListener('click', () => openImageModal(img.src, img.alt));
+        // If the thumb 404s for some reason, fall back to original
+        img.onerror = () => {
+          if (img.src.includes('/files/thumbs/')) {
+            img.onerror = null;
+            img.src = `${prefix}/files/${encodeURIComponent(original)}`;
+          }
+        };
+        // Open full original in lightbox
+        const originalUrl = `${prefix}/files/${encodeURIComponent(original)}`;
+        img.addEventListener('click', () => openImageModal(originalUrl, img.alt));
         img.addEventListener('keydown', e => {
           if (e.key === 'Enter' || e.key === ' ') {
-            openImageModal(img.src, img.alt);
+            openImageModal(originalUrl, img.alt);
           }
         });
         galleryEl.appendChild(img);
@@ -106,13 +129,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const tokenInput = document.getElementById('token');
     const fileInput = document.getElementById('photo');
     const token = tokenInput.value.trim();
-    const file = fileInput.files[0];
-    if (!file) {
-      showToast('Please select an image to upload', true);
+    const files = Array.from(fileInput.files || []);
+    if (!files.length) {
+      showToast('Please select image(s) to upload', true);
       return;
     }
     const formData = new FormData();
-    formData.append('photo', file);
+    for (const f of files) {
+      formData.append('photo', f);
+    }
     fetch(`${prefix}/api/upload`, {
       method: 'POST',
       headers: {
@@ -126,8 +151,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return response.json();
       })
-      .then(() => {
-        showToast('Upload successful');
+      .then((result) => {
+        if (result && result.success) {
+          const uploaded = (result.items || []).length;
+          const failed = (result.errors || []).length;
+          let msg = `Uploaded ${uploaded}`;
+          if (failed) msg += `, ${failed} failed`;
+          showToast(msg);
+        } else {
+          const message = result && result.error ? result.error : 'Upload failed';
+          showToast(message, true);
+        }
         closeModalFunc();
         loadGallery();
       })

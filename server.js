@@ -19,6 +19,7 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const PHOTO_DIR = process.env.PHOTO_DIR || path.join(__dirname, 'photos');
 const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || 'changeme';
 const MAX_FILE_BYTES = process.env.MAX_FILE_BYTES ? parseInt(process.env.MAX_FILE_BYTES, 10) : 10 * 1024 * 1024; // 10 MB
+const MAX_FILES_PER_UPLOAD = process.env.MAX_FILES_PER_UPLOAD ? parseInt(process.env.MAX_FILES_PER_UPLOAD, 10) : 10; // per request
 
 // Allowed file extensions for uploaded/served images
 const VALID_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
@@ -121,16 +122,35 @@ function generateFilename(ext) {
 // API to return the list of images. Reads the directory and filters by
 // extension. Does not perform any image manipulation.
 app.get('/api/photos', (req, res) => {
+  const includeMeta = 'meta' in req.query; // use ?meta=1 to get thumb info
   fs.readdir(PHOTO_DIR, (err, files) => {
     if (err) {
       console.error('Unable to list photo directory:', err);
       return res.status(500).json({ error: 'Unable to list photos' });
     }
-    const images = files.filter(file => {
+    const originals = files.filter(file => {
       const ext = path.extname(file).toLowerCase();
       return VALID_EXTENSIONS.includes(ext);
     });
-    return res.json(images);
+    if (!includeMeta) {
+      // Backward compatible: return array of strings
+      return res.json(originals);
+    }
+    // Optional: include thumbnail mapping metadata
+    fs.readdir(THUMBS_DIR, (thumbErr, thumbFiles) => {
+      const thumbSet = new Set(Array.isArray(thumbFiles) ? thumbFiles : []);
+      const images = originals.map(file => {
+        const ext = path.extname(file).toLowerCase();
+        const base = path.basename(file, ext);
+        const candidates = [
+          `${base}.thumb.jpg`,
+          `${base}.jpg`
+        ];
+        const found = candidates.find(name => thumbSet.has(name)) || null;
+        return { original: file, thumb: found };
+      });
+      return res.json(images);
+    });
   });
 });
 
@@ -156,23 +176,33 @@ app.get('/files/:name', (req, res) => {
 
 // Endpoint to serve thumbnails
 app.get('/files/thumbs/:name', (req, res) => {
-  const fileName = req.params.name;
-  const ext = path.extname(fileName).toLowerCase();
+  const inputName = req.params.name;
+  const ext = path.extname(inputName).toLowerCase();
   if (!VALID_EXTENSIONS.includes(ext)) {
     return res.status(404).send('Not found');
   }
-  const thumbPath = path.join(THUMBS_DIR, fileName);
-  fs.stat(thumbPath, (err, stats) => {
-    if (err || !stats.isFile()) {
-      return res.status(404).send('Not found');
-    }
+  // If a direct thumbnail file is requested and exists, serve it.
+  const directThumbPath = path.join(THUMBS_DIR, inputName);
+  if (fs.existsSync(directThumbPath) && fs.statSync(directThumbPath).isFile()) {
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.sendFile(thumbPath);
-  });
+    return res.sendFile(directThumbPath);
+  }
+  // Otherwise, treat inputName as the ORIGINAL filename and try to map to a thumb
+  const base = path.basename(inputName, ext);
+  const candidates = [
+    path.join(THUMBS_DIR, `${base}.thumb.jpg`), // new pattern
+    path.join(THUMBS_DIR, `${base}.jpg`) // legacy pattern
+  ];
+  const existing = candidates.find(p => fs.existsSync(p) && fs.statSync(p).isFile());
+  if (!existing) {
+    return res.status(404).send('Not found');
+  }
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  return res.sendFile(existing);
 });
 
 // Upload endpoint. Requires a valid Bearer token in the Authorization header.
-app.post('/api/upload', uploadLimiter, upload.single('photo'), async (req, res) => {
+app.post('/api/upload', uploadLimiter, upload.array('photo', MAX_FILES_PER_UPLOAD), async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -182,33 +212,52 @@ app.post('/api/upload', uploadLimiter, upload.single('photo'), async (req, res) 
     if (!timingSafeEquals(providedToken, UPLOAD_TOKEN)) {
       return res.status(401).json({ error: 'Invalid token' });
     }
-    const file = req.file;
-    if (!file) {
+    const files = Array.isArray(req.files) ? req.files : [];
+    if (!files.length) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (!VALID_EXTENSIONS.includes(ext)) {
-      return res.status(400).json({ error: 'Unsupported file type' });
+
+    const items = [];
+    const errors = [];
+    for (const file of files) {
+      try {
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (!VALID_EXTENSIONS.includes(ext)) {
+          errors.push({ original: file.originalname, error: 'Unsupported file type' });
+          continue;
+        }
+        if (!isValidImageMagic(file.buffer)) {
+          errors.push({ original: file.originalname, error: 'Uploaded file is not a valid image' });
+          continue;
+        }
+        const newName = generateFilename(ext);
+        const destPath = path.join(PHOTO_DIR, newName);
+        fs.writeFileSync(destPath, file.buffer);
+
+        const base = path.basename(newName, ext);
+        const thumbName = `${base}.thumb.jpg`;
+        const thumbPath = path.join(THUMBS_DIR, thumbName);
+        try {
+          await sharp(file.buffer)
+            .resize({ width: 450 })
+            .jpeg({ quality: 80 })
+            .toFile(thumbPath);
+        } catch (err) {
+          console.error('Error generating thumbnail:', err);
+          // Keep item, even if thumb failed
+        }
+        items.push({ filename: newName, thumb: thumbName });
+      } catch (err) {
+        console.error('Error processing file:', err);
+        errors.push({ original: file?.originalname || 'unknown', error: 'Processing failed' });
+      }
     }
-    if (!isValidImageMagic(file.buffer)) {
-      return res.status(400).json({ error: 'Uploaded file is not a valid image' });
+
+    if (items.length === 0) {
+      return res.status(400).json({ success: false, errors });
     }
-    const newName = generateFilename(ext);
-    const destPath = path.join(PHOTO_DIR, newName);
-    // Save original image
-    fs.writeFileSync(destPath, file.buffer);
-    // Generate and save thumbnail (300px wide, JPEG, quality 70)
-    const thumbPath = path.join(THUMBS_DIR, newName);
-    try {
-      await sharp(file.buffer)
-        .resize({ width: 300 })
-        .jpeg({ quality: 70 })
-        .toFile(thumbPath);
-    } catch (err) {
-      console.error('Error generating thumbnail:', err);
-      // Continue even if thumbnail fails
-    }
-    return res.status(200).json({ success: true, filename: newName });
+    return res.status(200).json({ success: true, items, errors: errors.length ? errors : undefined });
+
   } catch (e) {
     console.error('Error handling upload:', e);
     return res.status(500).json({ error: 'Unexpected error during upload' });
