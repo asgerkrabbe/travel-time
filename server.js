@@ -20,6 +20,14 @@ const PHOTO_DIR = process.env.PHOTO_DIR || path.join(__dirname, 'photos');
 const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || 'changeme';
 const MAX_FILE_BYTES = process.env.MAX_FILE_BYTES ? parseInt(process.env.MAX_FILE_BYTES, 10) : 10 * 1024 * 1024; // 10 MB
 const MAX_FILES_PER_UPLOAD = process.env.MAX_FILES_PER_UPLOAD ? parseInt(process.env.MAX_FILES_PER_UPLOAD, 10) : 10; // per request
+const ENABLE_TEST_FIXTURES = (() => {
+  const raw = process.env.ENABLE_TEST_FIXTURES;
+  if (typeof raw !== 'string') {
+    return false;
+  }
+  return ['1', 'true', 'yes'].includes(raw.toLowerCase());
+})();
+const TEST_FIXTURE_TOKEN = process.env.TEST_FIXTURE_TOKEN || UPLOAD_TOKEN;
 
 // Allowed file extensions for uploaded/served images
 const VALID_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
@@ -29,6 +37,9 @@ fs.mkdirSync(PHOTO_DIR, { recursive: true });
 // Ensure the thumbnail directory exists
 const THUMBS_DIR = path.join(PHOTO_DIR, 'thumbs');
 fs.mkdirSync(THUMBS_DIR, { recursive: true });
+
+const fsp = fs.promises;
+const TEST_FIXTURES = ENABLE_TEST_FIXTURES ? require('./deploy/test-fixtures') : [];
 
 const app = express();
 
@@ -101,6 +112,79 @@ function isValidImageMagic(buffer) {
     return true;
   }
   return false;
+}
+
+async function fileExists(filePath) {
+  try {
+    const stats = await fsp.stat(filePath);
+    return stats.isFile();
+  } catch (err) {
+    return false;
+  }
+}
+
+async function storeImageFromBuffer(buffer, originalName, options = {}) {
+  const { forceBasename, overwrite = true } = options;
+
+  if (!Buffer.isBuffer(buffer)) {
+    return { error: 'Uploaded file is not a valid image buffer', original: originalName };
+  }
+
+  const sourceName = forceBasename || originalName || 'upload';
+  const ext = path.extname(sourceName).toLowerCase();
+  if (!ext) {
+    return { error: 'Unable to determine file type', original: originalName };
+  }
+  if (!VALID_EXTENSIONS.includes(ext)) {
+    return { error: 'Unsupported file type', original: originalName };
+  }
+  if (!isValidImageMagic(buffer)) {
+    return { error: 'Uploaded file is not a valid image', original: originalName };
+  }
+
+  let targetName;
+  if (forceBasename) {
+    const safeBase = path.basename(forceBasename, ext);
+    targetName = `${safeBase}${ext}`;
+  } else {
+    targetName = generateFilename(ext);
+  }
+  const destPath = path.join(PHOTO_DIR, targetName);
+
+  if (!overwrite) {
+    if (await fileExists(destPath)) {
+      const base = path.basename(targetName, ext);
+      const thumbName = `${base}.thumb.jpg`;
+      const thumbPath = path.join(THUMBS_DIR, thumbName);
+      if (!(await fileExists(thumbPath))) {
+        try {
+          await sharp(buffer)
+            .resize({ width: 450 })
+            .jpeg({ quality: 80 })
+            .toFile(thumbPath);
+        } catch (err) {
+          console.error('Error generating thumbnail:', err);
+        }
+      }
+      return { item: { filename: targetName, thumb: thumbName }, skipped: true };
+    }
+  }
+
+  await fsp.writeFile(destPath, buffer);
+
+  const base = path.basename(targetName, ext);
+  const thumbName = `${base}.thumb.jpg`;
+  const thumbPath = path.join(THUMBS_DIR, thumbName);
+  try {
+    await sharp(buffer)
+      .resize({ width: 450 })
+      .jpeg({ quality: 80 })
+      .toFile(thumbPath);
+  } catch (err) {
+    console.error('Error generating thumbnail:', err);
+  }
+
+  return { item: { filename: targetName, thumb: thumbName }, skipped: false };
 }
 
 /**
@@ -221,32 +305,14 @@ app.post('/api/upload', uploadLimiter, upload.array('photo', MAX_FILES_PER_UPLOA
     const errors = [];
     for (const file of files) {
       try {
-        const ext = path.extname(file.originalname).toLowerCase();
-        if (!VALID_EXTENSIONS.includes(ext)) {
-          errors.push({ original: file.originalname, error: 'Unsupported file type' });
+        const result = await storeImageFromBuffer(file.buffer, file.originalname);
+        if (result.error) {
+          errors.push({ original: file.originalname, error: result.error });
           continue;
         }
-        if (!isValidImageMagic(file.buffer)) {
-          errors.push({ original: file.originalname, error: 'Uploaded file is not a valid image' });
-          continue;
+        if (result.item) {
+          items.push(result.item);
         }
-        const newName = generateFilename(ext);
-        const destPath = path.join(PHOTO_DIR, newName);
-        fs.writeFileSync(destPath, file.buffer);
-
-        const base = path.basename(newName, ext);
-        const thumbName = `${base}.thumb.jpg`;
-        const thumbPath = path.join(THUMBS_DIR, thumbName);
-        try {
-          await sharp(file.buffer)
-            .resize({ width: 450 })
-            .jpeg({ quality: 80 })
-            .toFile(thumbPath);
-        } catch (err) {
-          console.error('Error generating thumbnail:', err);
-          // Keep item, even if thumb failed
-        }
-        items.push({ filename: newName, thumb: thumbName });
       } catch (err) {
         console.error('Error processing file:', err);
         errors.push({ original: file?.originalname || 'unknown', error: 'Processing failed' });
@@ -262,6 +328,53 @@ app.post('/api/upload', uploadLimiter, upload.array('photo', MAX_FILES_PER_UPLOA
     console.error('Error handling upload:', e);
     return res.status(500).json({ error: 'Unexpected error during upload' });
   }
+});
+
+app.post('/api/test/fixtures', async (req, res) => {
+  if (!ENABLE_TEST_FIXTURES) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  }
+  const providedToken = authHeader.slice(7);
+  if (!timingSafeEquals(providedToken, TEST_FIXTURE_TOKEN)) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+
+  const results = [];
+  const errors = [];
+
+  for (const fixture of TEST_FIXTURES) {
+    try {
+      const buffer = Buffer.from(fixture.base64, 'base64');
+      const result = await storeImageFromBuffer(buffer, fixture.filename, {
+        forceBasename: fixture.filename,
+        overwrite: false
+      });
+      if (result.error) {
+        errors.push({ fixture: fixture.slug, error: result.error });
+      }
+      if (result.item) {
+        results.push({
+          fixture: fixture.slug,
+          filename: result.item.filename,
+          thumb: result.item.thumb,
+          skipped: Boolean(result.skipped)
+        });
+      }
+    } catch (err) {
+      console.error('Error loading test fixture:', err);
+      errors.push({ fixture: fixture.slug, error: 'Processing failed' });
+    }
+  }
+
+  return res.status(200).json({
+    success: results.some(item => !item.skipped),
+    results,
+    errors: errors.length ? errors : undefined
+  });
 });
 
 // Serve the static frontend assets from the `public` directory. The index
