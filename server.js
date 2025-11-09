@@ -343,6 +343,12 @@ app.post('/api/test/fixtures', async (req, res) => {
     return res.status(401).json({ error: 'Invalid token' });
   }
 
+  // Optional: allow forced regeneration via query flag ?overwrite=1
+  const overwriteFlagRaw = typeof req.query.overwrite === 'string' ? req.query.overwrite : undefined;
+  const allowOverwrite = overwriteFlagRaw
+    ? ['1', 'true', 'yes'].includes(overwriteFlagRaw.toLowerCase())
+    : false;
+
   const results = [];
   const errors = [];
 
@@ -351,7 +357,7 @@ app.post('/api/test/fixtures', async (req, res) => {
       const buffer = Buffer.from(fixture.base64, 'base64');
       const result = await storeImageFromBuffer(buffer, fixture.filename, {
         forceBasename: fixture.filename,
-        overwrite: false
+        overwrite: allowOverwrite
       });
       if (result.error) {
         errors.push({ fixture: fixture.slug, error: result.error });
