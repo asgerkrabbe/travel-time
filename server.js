@@ -268,7 +268,11 @@ app.post('/api/upload', uploadLimiter, upload.array('photo', MAX_FILES_PER_UPLOA
 // contains the gallery UI and upload modal.
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Photo app listening on port ${PORT}`);
-});
+// Export the app for testing while still supporting direct execution.
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Photo app listening on port ${PORT}`);
+  });
+}
+
+module.exports = app;
