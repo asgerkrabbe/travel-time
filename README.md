@@ -49,12 +49,15 @@ new photos.
 
 ## Environment Variables
 
-| Variable       | Description                                                                                 | Default           |
-|---------------:|:--------------------------------------------------------------------------------------------|------------------:|
-| `PHOTO_DIR`    | Absolute path to the directory where images are stored. This path must be writable.         | `./photos`        |
-| `UPLOAD_TOKEN` | Long random secret required to POST to `/api/upload`. Sent as `Authorization: Bearer …`.    | `changeme`        |
-| `PORT`         | Port the Express server listens on.                                                         | `3000`            |
-| `MAX_FILE_BYTES` | Maximum allowed size in bytes for an uploaded file. Tune based on server resources.      | `10485760` (10 MB) |
+| Variable | Description | Default |
+| --- | --- | --- |
+| `PHOTO_DIR` | Absolute path to the directory where images are stored. This path must be writable. | `./photos` |
+| `UPLOAD_TOKEN` | Long random secret required to POST to `/api/upload`. Sent as `Authorization: Bearer …`. | `changeme` |
+| `PORT` | Port the Express server listens on. | `3000` |
+| `MAX_FILE_BYTES` | Maximum allowed size in bytes for an uploaded file. Tune based on server resources. | `10485760` (10 MB) |
+| `MAX_FILES_PER_UPLOAD` | Maximum number of files accepted per upload request. | `10` |
+| `ENABLE_TEST_FIXTURES` | When set to `true`, enables the `/api/test/fixtures` endpoint for seeding demo images. | `false` |
+| `TEST_FIXTURE_TOKEN` | Optional token used for `/api/test/fixtures`; falls back to `UPLOAD_TOKEN` when unset. | `UPLOAD_TOKEN` |
 
 Create a `.env` file (or pass variables via your process manager) with values
 appropriate for your environment. **Never commit your real `UPLOAD_TOKEN`
@@ -88,6 +91,20 @@ filename (timestamp + random hex). The response contains the new filename.
 
 Rate limiting is applied per IP (10 uploads per 15 minutes by default) to
 mitigate abuse.
+
+### `POST /api/test/fixtures`
+
+Seeds the gallery with a handful of sample images so you can exercise the UI
+and API without manually uploading photos. This endpoint is **disabled by
+default**. To enable it, set `ENABLE_TEST_FIXTURES=true` in your environment
+and restart the server. Authentication uses the same Bearer token format as the
+upload endpoint; by default it reuses `UPLOAD_TOKEN`, but you may override it
+with `TEST_FIXTURE_TOKEN`.
+
+When invoked, the endpoint copies three small PNG fixtures into `PHOTO_DIR`
+without overwriting existing files. Re-running the endpoint is idempotent – it
+skips any fixture that is already present and only regenerates missing
+thumbnails.
 
 ## Frontend
 

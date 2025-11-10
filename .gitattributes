@@ -1,0 +1,9 @@
+# Ensure JavaScript files are checked out with LF on all platforms
+*.js text eol=lf
+
+# Ensure images are treated as binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
