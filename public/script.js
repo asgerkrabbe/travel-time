@@ -6,6 +6,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const galleryEl = document.getElementById('gallery');
   const uploadButton = document.getElementById('uploadButton');
+  const deleteToggle = document.getElementById('deleteToggle');
   const modalEl = document.getElementById('modal');
   const closeModal = document.getElementById('closeModal');
   const cancelUpload = document.getElementById('cancelUpload');
@@ -15,6 +16,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const imageModal = document.getElementById('imageModal');
   const closeImageModal = document.getElementById('closeImageModal');
   const modalImage = document.getElementById('modalImage');
+  const confirmModal = document.getElementById('confirmModal');
+  const confirmDeleteBtn = document.getElementById('confirmDelete');
+  const cancelDeleteBtn = document.getElementById('cancelDelete');
+  const confirmMessage = document.getElementById('confirmMessage');
+
+  let deleteMode = false;
+  let photoToDelete = null;
 
   // Fetch the list of image filenames and render them into the gallery.
   async function loadGallery() {
@@ -74,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const figure = document.createElement('figure');
         figure.className = 'photo-item';
+        figure.dataset.filename = original;
 
         const img = document.createElement('img');
         // Prefer serving thumbnails; if API only returned originals, we can also
@@ -109,8 +118,20 @@ document.addEventListener('DOMContentLoaded', () => {
         caption.className = 'caption';
         caption.textContent = dateLabel || 'Unknown';
 
+        // Delete button (only visible in delete mode)
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.innerHTML = '&times;';
+        deleteBtn.title = 'Delete photo';
+        deleteBtn.setAttribute('aria-label', 'Delete photo');
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showConfirmModal(original, dateLabel || 'Unknown');
+        });
+
         figure.appendChild(img);
         figure.appendChild(caption);
+        figure.appendChild(deleteBtn);
         galleryEl.appendChild(figure);
       });
     } catch (err) {
@@ -130,6 +151,87 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       toastEl.classList.remove('show');
     }, 3000);
+  }
+
+  // Toggle delete mode
+  function toggleDeleteMode() {
+    deleteMode = !deleteMode;
+    document.body.classList.toggle('delete-mode', deleteMode);
+    deleteToggle.classList.toggle('active', deleteMode);
+    if (deleteMode) {
+      deleteToggle.setAttribute('aria-label', 'Cancel delete mode');
+      deleteToggle.setAttribute('title', 'Cancel delete mode');
+    } else {
+      deleteToggle.setAttribute('aria-label', 'Delete mode');
+      deleteToggle.setAttribute('title', 'Toggle delete mode');
+    }
+  }
+
+  // Show confirmation modal
+  function showConfirmModal(filename, dateLabel) {
+    photoToDelete = filename;
+    confirmMessage.textContent = `Delete photo from ${dateLabel}?`;
+    confirmModal.classList.remove('hidden');
+    confirmModal.setAttribute('aria-hidden', 'false');
+    confirmDeleteBtn.focus();
+  }
+
+  // Hide confirmation modal
+  function closeConfirmModal() {
+    photoToDelete = null;
+    confirmModal.classList.add('hidden');
+    confirmModal.setAttribute('aria-hidden', 'true');
+  }
+
+  // Delete photo
+  async function deletePhoto() {
+    if (!photoToDelete) return;
+
+    const tokenInput = document.getElementById('token');
+    let token = tokenInput ? tokenInput.value.trim() : '';
+    
+    // If token input is empty, prompt user
+    if (!token) {
+      token = prompt('Enter your upload token to delete photos:');
+      if (!token) {
+        showToast('Delete cancelled', false);
+        closeConfirmModal();
+        return;
+      }
+    }
+
+    try {
+      const response = await fetch(`${prefix}/api/photos/${encodeURIComponent(photoToDelete)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': 'Bearer ' + token
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Delete failed');
+      }
+
+      const result = await response.json();
+      showToast('Photo deleted successfully', false);
+      closeConfirmModal();
+      
+      // Remove photo from gallery with animation
+      const photoItem = document.querySelector(`.photo-item[data-filename="${photoToDelete}"]`);
+      if (photoItem) {
+        photoItem.style.opacity = '0';
+        photoItem.style.transform = 'scale(0.8)';
+        setTimeout(() => {
+          loadGallery();
+        }, 300);
+      } else {
+        loadGallery();
+      }
+    } catch (err) {
+      showToast(err.message || 'Error deleting photo', true);
+      closeConfirmModal();
+    }
   }
 
   function openModal() {
@@ -165,6 +267,11 @@ document.addEventListener('DOMContentLoaded', () => {
     openModal();
   });
 
+  // Delete mode toggle
+  deleteToggle.addEventListener('click', () => {
+    toggleDeleteMode();
+  });
+
   // Hide modal on close and cancel click
   if (closeModal) {
     closeModal.addEventListener('click', closeModalFunc);
@@ -177,12 +284,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Handle form submission for file upload
   uploadForm.addEventListener('submit', event => {
     event.preventDefault();
+    const submitBtn = event.submitter || event.target.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+    
     const tokenInput = document.getElementById('token');
     const fileInput = document.getElementById('photo');
     const token = tokenInput.value.trim();
     const files = Array.from(fileInput.files || []);
     if (!files.length) {
       showToast('Please select image(s) to upload', true);
+      if (submitBtn) submitBtn.disabled = false;
       return;
     }
     const formData = new FormData();
@@ -219,7 +330,20 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(error => {
         const message = error && error.error ? error.error : 'Upload failed';
         showToast(message, true);
+      })
+      .finally(() => {
+        if (submitBtn) submitBtn.disabled = false;
       });
+  });
+
+  // Confirm delete button
+  confirmDeleteBtn.addEventListener('click', () => {
+    deletePhoto();
+  });
+
+  // Cancel delete button
+  cancelDeleteBtn.addEventListener('click', () => {
+    closeConfirmModal();
   });
 
   // Close image modal on close button click

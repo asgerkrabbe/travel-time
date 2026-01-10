@@ -373,6 +373,137 @@ app.get('/files/thumbs/:name', async (req, res) => {
   }
 });
 
+// Rate limiter for successful delete operations (20 per 15 minutes)
+const deleteSuccessLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many delete requests. Please try again later.' },
+  skip: (req) => req.deleteAuthFailed === true // Skip counting if auth failed
+});
+
+// Track failed authentication attempts for brute-force protection
+const deleteFailedAttempts = new Map();
+const DELETE_FAIL_WINDOW = 12 * 60 * 60 * 1000; // 12 hours
+const DELETE_FAIL_MAX = 3;
+
+function checkDeleteAuthFailures(ip) {
+  const now = Date.now();
+  if (!deleteFailedAttempts.has(ip)) {
+    return { allowed: true, remaining: DELETE_FAIL_MAX };
+  }
+  const attempts = deleteFailedAttempts.get(ip);
+  // Filter out old attempts outside the window
+  const recentAttempts = attempts.filter(timestamp => now - timestamp < DELETE_FAIL_WINDOW);
+  deleteFailedAttempts.set(ip, recentAttempts);
+  
+  if (recentAttempts.length >= DELETE_FAIL_MAX) {
+    const oldestAttempt = Math.min(...recentAttempts);
+    const retryAfter = Math.ceil((oldestAttempt + DELETE_FAIL_WINDOW - now) / 1000 / 60); // minutes
+    return { allowed: false, retryAfter };
+  }
+  return { allowed: true, remaining: DELETE_FAIL_MAX - recentAttempts.length };
+}
+
+function recordDeleteAuthFailure(ip) {
+  const now = Date.now();
+  if (!deleteFailedAttempts.has(ip)) {
+    deleteFailedAttempts.set(ip, [now]);
+  } else {
+    const attempts = deleteFailedAttempts.get(ip);
+    attempts.push(now);
+    deleteFailedAttempts.set(ip, attempts);
+  }
+}
+
+// Delete endpoint. Requires a valid Bearer token in the Authorization header.
+// Deletes both the original photo and its thumbnail.
+app.delete('/api/photos/:filename', deleteSuccessLimiter, async (req, res) => {
+  try {
+    const ip = req.ip || req.connection.remoteAddress;
+    
+    // Check for too many failed auth attempts
+    const authCheck = checkDeleteAuthFailures(ip);
+    if (!authCheck.allowed) {
+      return res.status(429).json({ 
+        error: `Too many failed authentication attempts. Please try again in ${authCheck.retryAfter} minutes.` 
+      });
+    }
+
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      req.deleteAuthFailed = true;
+      recordDeleteAuthFailure(ip);
+      return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+    }
+    const providedToken = authHeader.slice(7);
+    if (!timingSafeEquals(providedToken, UPLOAD_TOKEN)) {
+      req.deleteAuthFailed = true;
+      recordDeleteAuthFailure(ip);
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const filename = req.params.filename;
+    const ext = path.extname(filename).toLowerCase();
+    if (!VALID_EXTENSIONS.includes(ext)) {
+      return res.status(400).json({ error: 'Invalid file type' });
+    }
+
+    // Prevent path traversal attacks
+    const sanitized = path.basename(filename);
+    if (sanitized !== filename) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const photoPath = path.join(PHOTO_DIR, filename);
+    const base = path.basename(filename, ext);
+    const thumbCandidates = [
+      path.join(THUMBS_DIR, `${base}.thumb.jpg`),
+      path.join(THUMBS_DIR, `${base}.jpg`)
+    ];
+
+    let photoDeleted = false;
+    let thumbDeleted = false;
+
+    // Delete the original photo
+    try {
+      await fs.promises.unlink(photoPath);
+      photoDeleted = true;
+      console.log(`Deleted photo: ${filename}`);
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        return res.status(404).json({ error: 'Photo not found' });
+      }
+      throw err;
+    }
+
+    // Delete the thumbnail(s) if they exist
+    for (const thumbPath of thumbCandidates) {
+      try {
+        await fs.promises.unlink(thumbPath);
+        thumbDeleted = true;
+        console.log(`Deleted thumbnail: ${path.basename(thumbPath)}`);
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          console.error(`Error deleting thumbnail ${thumbPath}:`, err);
+        }
+      }
+    }
+
+    return res.json({ 
+      success: true, 
+      message: 'Photo deleted',
+      photo_deleted: photoDeleted,
+      thumbnail_deleted: thumbDeleted
+    });
+
+  } catch (err) {
+    console.error('Error deleting photo:', err);
+    return res.status(500).json({ error: 'Failed to delete photo' });
+  }
+});
+
 // Upload endpoint. Requires a valid Bearer token in the Authorization header.
 app.post('/api/upload', uploadLimiter, upload.array('photo', MAX_FILES_PER_UPLOAD), async (req, res) => {
   try {
