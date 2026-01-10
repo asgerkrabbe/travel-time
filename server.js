@@ -21,6 +21,7 @@ const PHOTO_DIR = process.env.PHOTO_DIR || path.join(__dirname, 'photos');
 const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || 'changeme';
 const MAX_FILE_BYTES = process.env.MAX_FILE_BYTES ? parseInt(process.env.MAX_FILE_BYTES, 10) : 10 * 1024 * 1024; // 10 MB
 const MAX_FILES_PER_UPLOAD = process.env.MAX_FILES_PER_UPLOAD ? parseInt(process.env.MAX_FILES_PER_UPLOAD, 10) : 10; // per request
+const EXIF_BUFFER_SIZE = 65536; // 64KB, sufficient for EXIF headers in most images
 
 // Allowed file extensions for uploaded/served images
 const VALID_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
@@ -140,10 +141,14 @@ app.get('/api/photos', async (req, res) => {
       try {
         // Read only the first 64KB for EXIF headers (sufficient for most images)
         const fileHandle = await fs.promises.open(fullPath, 'r');
-        const buffer = Buffer.alloc(65536); // 64KB
-        const { bytesRead } = await fileHandle.read(buffer, 0, 65536, 0);
-        await fileHandle.close();
-        const fileBuf = buffer.slice(0, bytesRead);
+        let fileBuf;
+        try {
+          const buffer = Buffer.alloc(EXIF_BUFFER_SIZE);
+          const { bytesRead } = await fileHandle.read(buffer, 0, EXIF_BUFFER_SIZE, 0);
+          fileBuf = buffer.slice(0, bytesRead);
+        } finally {
+          await fileHandle.close();
+        }
         
         try {
           const parsed = exifParser.create(fileBuf).parse();
