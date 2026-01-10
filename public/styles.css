@@ -442,6 +442,75 @@ input[type="password"]:focus {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
 }
 
+/* Navigation buttons in image modal */
+.nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.9);
+  color: #1a1a1a;
+  border: none;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 3;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.nav-btn:hover {
+  background: #fff;
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+
+.nav-prev {
+  left: 1rem;
+}
+
+.nav-next {
+  right: 1rem;
+}
+
+@media (max-width: 768px) {
+  .nav-btn {
+    width: 3rem;
+    height: 3rem;
+  }
+  
+  .nav-prev {
+    left: 0.5rem;
+  }
+
+  .nav-next {
+    right: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  
+  .nav-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .nav-prev {
+    left: 0.25rem;
+  }
+
+  .nav-next {
+    right: 0.25rem;
+  }
+}
+
 /* Confirmation modal specific styles */
 .confirm-modal-content {
   max-width: 400px;

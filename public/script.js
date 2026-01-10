@@ -23,6 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let deleteMode = false;
   let photoToDelete = null;
+  let currentImageIndex = -1;
+  let allImages = [];
+  const preloadedImages = {}; // Cache for preloaded images
 
   // Fetch the list of image filenames and render them into the gallery.
   async function loadGallery() {
@@ -42,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
             : payload)
         : [];
       
+      allImages = []; // Reset images array
       let lastMonthYear = null;
       
       items.forEach(item => {
@@ -107,10 +111,10 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         // Open full original in lightbox
         const originalUrl = `${prefix}/files/${encodeURIComponent(original)}`;
-        img.addEventListener('click', () => openImageModal(originalUrl, img.alt));
+        img.addEventListener('click', () => openImageModal(originalUrl, img.alt, items.indexOf(item)));
         img.addEventListener('keydown', e => {
           if (e.key === 'Enter' || e.key === ' ') {
-            openImageModal(originalUrl, img.alt);
+            openImageModal(originalUrl, img.alt, items.indexOf(item));
           }
         });
 
@@ -133,6 +137,13 @@ document.addEventListener('DOMContentLoaded', () => {
         figure.appendChild(caption);
         figure.appendChild(deleteBtn);
         galleryEl.appendChild(figure);
+        
+        // Track image for navigation
+        allImages.push({
+          original: original,
+          url: `${prefix}/files/${encodeURIComponent(original)}`,
+          alt: original
+        });
       });
     } catch (err) {
       showToast(err.message || 'Error loading gallery', true);
@@ -247,12 +258,82 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Open image modal with the clicked image
-  function openImageModal(src, alt) {
+  function openImageModal(src, alt, index = -1) {
+    currentImageIndex = index;
     modalImage.src = src;
     modalImage.alt = alt || 'Preview';
     imageModal.classList.remove('hidden');
     imageModal.setAttribute('aria-hidden', 'false');
     closeImageModal.focus();
+    updateNavButtons();
+    preloadAdjacentImages();
+  }
+
+  // Update navigation buttons visibility
+  function updateNavButtons() {
+    const prevBtn = document.getElementById('prevImage');
+    const nextBtn = document.getElementById('nextImage');
+    if (prevBtn && nextBtn) {
+      prevBtn.style.display = currentImageIndex > 0 ? 'flex' : 'none';
+      nextBtn.style.display = currentImageIndex < allImages.length - 1 ? 'flex' : 'none';
+    }
+  }
+
+  // Preload adjacent images for smoother transitions
+  function preloadAdjacentImages() {
+    const urlsToPreload = [];
+    
+    // Preload previous image
+    if (currentImageIndex > 0) {
+      const prevUrl = allImages[currentImageIndex - 1].url;
+      if (!preloadedImages[prevUrl]) {
+        urlsToPreload.push(prevUrl);
+      }
+    }
+    
+    // Preload next image
+    if (currentImageIndex < allImages.length - 1) {
+      const nextUrl = allImages[currentImageIndex + 1].url;
+      if (!preloadedImages[nextUrl]) {
+        urlsToPreload.push(nextUrl);
+      }
+    }
+    
+    // Load images in background
+    urlsToPreload.forEach(url => {
+      const img = new Image();
+      img.onload = () => {
+        preloadedImages[url] = true;
+      };
+      img.onerror = () => {
+        // Silently ignore preload errors
+      };
+      img.src = url;
+    });
+  }
+
+  // Navigate to previous image
+  function showPreviousImage() {
+    if (currentImageIndex > 0) {
+      currentImageIndex--;
+      const img = allImages[currentImageIndex];
+      modalImage.src = img.url;
+      modalImage.alt = img.alt;
+      updateNavButtons();
+      preloadAdjacentImages();
+    }
+  }
+
+  // Navigate to next image
+  function showNextImage() {
+    if (currentImageIndex < allImages.length - 1) {
+      currentImageIndex++;
+      const img = allImages[currentImageIndex];
+      modalImage.src = img.url;
+      modalImage.alt = img.alt;
+      updateNavButtons();
+      preloadAdjacentImages();
+    }
   }
 
   // Close image modal
@@ -356,13 +437,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Close image modal on Escape key
+  // Image navigation with arrow keys
   document.addEventListener('keydown', event => {
-    if (imageModal.getAttribute('aria-hidden') === 'false' && event.key === 'Escape') {
-      event.preventDefault();
-      closeImageModalFunc();
+    if (imageModal.getAttribute('aria-hidden') === 'false') {
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        showPreviousImage();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        showNextImage();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closeImageModalFunc();
+      }
     }
   });
+
+  // Navigation button click handlers
+  const prevBtn = document.getElementById('prevImage');
+  const nextBtn = document.getElementById('nextImage');
+  if (prevBtn) {
+    prevBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showPreviousImage();
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showNextImage();
+    });
+  }
 
   // Global keyboard shortcuts: press 'u' to open the upload modal and 'Escape' to close it
   document.addEventListener('keydown', event => {
