@@ -5,6 +5,7 @@ const express = require('express');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const sharp = require('sharp');
+const exifParser = require('exif-parser');
 require('dotenv').config();
 
 /*
@@ -121,37 +122,145 @@ function generateFilename(ext) {
 
 // API to return the list of images. Reads the directory and filters by
 // extension. Does not perform any image manipulation.
-app.get('/api/photos', (req, res) => {
-  const includeMeta = 'meta' in req.query; // use ?meta=1 to get thumb info
-  fs.readdir(PHOTO_DIR, (err, files) => {
-    if (err) {
-      console.error('Unable to list photo directory:', err);
-      return res.status(500).json({ error: 'Unable to list photos' });
-    }
+app.get('/api/photos', async (req, res) => {
+  const includeMeta = 'meta' in req.query; // use ?meta=1 to get thumb info and date_taken
+
+  try {
+    const files = await fs.promises.readdir(PHOTO_DIR);
     const originals = files.filter(file => {
       const ext = path.extname(file).toLowerCase();
       return VALID_EXTENSIONS.includes(ext);
     });
-    if (!includeMeta) {
-      // Backward compatible: return array of strings
-      return res.json(originals);
+
+    // Helper to extract date taken (EXIF DateTimeOriginal) with fallback to mtime
+    async function getDateInfoFor(file) {
+      const fullPath = path.join(PHOTO_DIR, file);
+      let dateMs = null;
+      let source = null;
+      try {
+        // First try parsing EXIF directly from the full file buffer
+        const fileBuf = await fs.promises.readFile(fullPath);
+        try {
+          const parsed = exifParser.create(fileBuf).parse();
+          const tags = parsed && parsed.tags ? parsed.tags : {};
+          let ts = null;
+          const candidates = [
+            tags.DateTimeOriginal,
+            tags.CreateDate,
+            tags.ModifyDate,
+            tags.DateTimeDigitized
+          ];
+          for (const val of candidates) {
+            if (ts) break;
+            if (typeof val === 'number') ts = val * 1000; // seconds -> ms
+            else if (val instanceof Date) ts = +val;
+            else if (typeof val === 'string') {
+              const m = val.match(/^([0-9]{4}):([0-9]{2}):([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2})$/);
+              if (m) {
+                const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`;
+                ts = Date.parse(iso);
+              }
+            }
+          }
+          if (typeof ts === 'number' && ts > 0) {
+            dateMs = ts;
+            source = 'exif';
+          }
+        } catch (e1) {
+          // ignore and try sharp metadata fallback
+        }
+
+        // As an additional attempt, try sharp's extracted EXIF buffer if present
+        if (!dateMs) {
+          try {
+            const meta = await sharp(fullPath).metadata();
+            if (meta && meta.exif && Buffer.isBuffer(meta.exif)) {
+              const parsed2 = exifParser.create(meta.exif).parse();
+              const tags2 = parsed2 && parsed2.tags ? parsed2.tags : {};
+              let ts2 = null;
+              const cands2 = [tags2.DateTimeOriginal, tags2.CreateDate, tags2.ModifyDate, tags2.DateTimeDigitized];
+              for (const v of cands2) {
+                if (ts2) break;
+                if (typeof v === 'number') ts2 = v * 1000;
+                else if (v instanceof Date) ts2 = +v;
+                else if (typeof v === 'string') {
+                  const m = v.match(/^([0-9]{4}):([0-9]{2}):([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2})$/);
+                  if (m) ts2 = Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`);
+                }
+              }
+              if (typeof ts2 === 'number' && ts2 > 0) {
+                dateMs = ts2;
+                source = 'exif';
+              }
+            }
+          } catch (e2) {
+            // ignore
+          }
+        }
+      } catch (fileReadErr) {
+        // Couldn't read file; will fall back below
+      }
+      if (!dateMs) {
+        try {
+          const stats = await fs.promises.stat(fullPath);
+          // Fallback to mtime as a reasonable proxy when EXIF missing
+          dateMs = stats.mtimeMs;
+          source = 'mtime';
+        } catch (statErr) {
+          // As a last resort, use 0 to push unknowns to the end
+          dateMs = 0;
+          source = 'unknown';
+        }
+      }
+      return { dateMs, source };
     }
-    // Optional: include thumbnail mapping metadata
-    fs.readdir(THUMBS_DIR, (thumbErr, thumbFiles) => {
-      const thumbSet = new Set(Array.isArray(thumbFiles) ? thumbFiles : []);
-      const images = originals.map(file => {
-        const ext = path.extname(file).toLowerCase();
-        const base = path.basename(file, ext);
-        const candidates = [
-          `${base}.thumb.jpg`,
-          `${base}.jpg`
-        ];
-        const found = candidates.find(name => thumbSet.has(name)) || null;
-        return { original: file, thumb: found };
-      });
-      return res.json(images);
+
+    // Collect date info for sorting
+    const withDates = await Promise.all(
+      originals.map(async f => {
+        const info = await getDateInfoFor(f);
+        return { file: f, dateMs: info.dateMs, source: info.source };
+      })
+    );
+
+    // Sort newest to oldest by dateMs descending
+    withDates.sort((a, b) => b.dateMs - a.dateMs);
+
+    if (!includeMeta) {
+      // Backward compatible: return array of strings, already sorted
+      return res.json(withDates.map(x => x.file));
+    }
+
+    // Optional: include thumbnail mapping metadata and date_taken
+    let thumbFiles = [];
+    try {
+      thumbFiles = await fs.promises.readdir(THUMBS_DIR);
+    } catch (e) {
+      thumbFiles = [];
+    }
+    const thumbSet = new Set(Array.isArray(thumbFiles) ? thumbFiles : []);
+
+    const images = withDates.map(({ file, dateMs, source }) => {
+      const ext = path.extname(file).toLowerCase();
+      const base = path.basename(file, ext);
+      const candidates = [
+        `${base}.thumb.jpg`,
+        `${base}.jpg`
+      ];
+      const found = candidates.find(name => thumbSet.has(name)) || null;
+      return {
+        original: file,
+        thumb: found,
+        date_taken: dateMs ? new Date(dateMs).toISOString() : null,
+        date_source: source
+      };
     });
-  });
+
+    return res.json(images);
+  } catch (err) {
+    console.error('Unable to list photo directory:', err);
+    return res.status(500).json({ error: 'Unable to list photos' });
+  }
 });
 
 // Endpoint to serve individual images. Sends the file from disk with caching

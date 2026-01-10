@@ -84,6 +84,26 @@ main {
   align-items: start;
 }
 
+.month-divider {
+  grid-column: 1 / -1;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #3e63dd;
+  padding: 1.5rem 0 0.5rem 0;
+  margin-top: 1rem;
+  border-bottom: 2px solid #e0e7ff;
+  text-align: left;
+  letter-spacing: 0.5px;
+}
+
+.month-divider:first-child {
+  margin-top: 0;
+}
+
+.photo-item {
+  margin: 0;
+}
+
 .gallery img {
   width: 100%;
   max-width: 100%;
@@ -100,6 +120,13 @@ main {
   transform: scale(1.03);
   box-shadow: 0 8px 32px rgba(62,99,221,0.18);
   border-color: #3e63dd;
+}
+
+.caption {
+  font-size: 0.85rem;
+  color: #3b3f58;
+  margin-top: 0.5rem;
+  text-align: center;
 }
 
 /* Modal styles (minimal) */
