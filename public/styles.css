@@ -135,7 +135,7 @@ main {
   image-orientation: from-image;
 }
 
-.photo-item:hover .gallery img {
+.photo-item:hover img {
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
   transform: scale(1.02);
 }
