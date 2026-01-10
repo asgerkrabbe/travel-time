@@ -14,3 +14,15 @@ yarn-error.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Images and uploads
+photos/**/*.jpg
+photos/**/*.jpeg
+photos/**/*.png
+photos/**/*.gif
+photos/**/*.webp
+
+# Build outputs
+package-lock.json
+yarn.lock
+.vscode/*

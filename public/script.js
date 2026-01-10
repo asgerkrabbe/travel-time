@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch the list of image filenames and render them into the gallery.
   async function loadGallery() {
     try {
-      const response = await fetch(`${prefix}/api/photos`);
+      const response = await fetch(`${prefix}/api/photos?meta=1`);
       if (!response.ok) {
         throw new Error('Failed to fetch photos');
       }
@@ -27,15 +27,54 @@ document.addEventListener('DOMContentLoaded', () => {
       galleryEl.innerHTML = '';
       // Support two payload shapes:
       // 1) ["file1.jpg", ...]
-      // 2) [{ original: "file1.jpg", thumb: "file1.thumb.jpg" | null }, ...]
+      // 2) [{ original: "file1.jpg", thumb: "file1.thumb.jpg" | null, date_taken?: string }, ...]
       const items = Array.isArray(payload)
         ? (typeof payload[0] === 'string' || payload.length === 0
-            ? payload.map(p => ({ original: p, thumb: null }))
+            ? payload.map(p => ({ original: p, thumb: null, date_taken: null }))
             : payload)
         : [];
+      
+      let lastMonthYear = null;
+      
       items.forEach(item => {
         const original = item && typeof item.original === 'string' ? item.original : String(item);
         const thumb = item && typeof item.thumb === 'string' ? item.thumb : null;
+        const dateTaken = item && typeof item.date_taken === 'string' ? item.date_taken : null;
+        
+        // Format date as DD/MM/YYYY
+        let dateLabel = '';
+        let photoDate = null;
+        if (dateTaken) {
+          photoDate = new Date(dateTaken);
+          // Validate that the date is valid
+          if (!isNaN(photoDate.getTime())) {
+            const day = String(photoDate.getDate()).padStart(2, '0');
+            const month = String(photoDate.getMonth() + 1).padStart(2, '0');
+            const year = photoDate.getFullYear();
+            dateLabel = `${day}/${month}/${year}`;
+          } else {
+            // Invalid date, reset photoDate to null
+            photoDate = null;
+          }
+        }
+
+        // Insert month/year divider if month changed
+        if (photoDate) {
+          const monthYear = `${photoDate.getFullYear()}-${photoDate.getMonth()}`;
+          if (monthYear !== lastMonthYear) {
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                                'July', 'August', 'September', 'October', 'November', 'December'];
+            const divider = document.createElement('div');
+            divider.className = 'month-divider';
+            divider.textContent = `${monthNames[photoDate.getMonth()]} - ${photoDate.getFullYear()}`;
+            galleryEl.appendChild(divider);
+            lastMonthYear = monthYear;
+          }
+        }
+
+        const figure = document.createElement('figure');
+        figure.className = 'photo-item';
+
         const img = document.createElement('img');
         // Prefer serving thumbnails; if API only returned originals, we can also
         // request /files/thumbs by original name thanks to server-side mapping.
@@ -45,6 +84,11 @@ document.addEventListener('DOMContentLoaded', () => {
         img.alt = original;
         img.loading = 'lazy';
         img.tabIndex = 0;
+        if (dateLabel) {
+          img.title = dateLabel;
+          img.setAttribute('aria-label', `Photo taken ${dateLabel}`);
+          img.dataset.dateTaken = dateTaken;
+        }
         // If the thumb 404s for some reason, fall back to original
         img.onerror = () => {
           if (img.src.includes('/files/thumbs/')) {
@@ -60,7 +104,14 @@ document.addEventListener('DOMContentLoaded', () => {
             openImageModal(originalUrl, img.alt);
           }
         });
-        galleryEl.appendChild(img);
+
+        const caption = document.createElement('figcaption');
+        caption.className = 'caption';
+        caption.textContent = dateLabel || 'Unknown';
+
+        figure.appendChild(img);
+        figure.appendChild(caption);
+        galleryEl.appendChild(figure);
       });
     } catch (err) {
       showToast(err.message || 'Error loading gallery', true);
