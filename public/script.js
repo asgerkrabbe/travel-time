@@ -179,12 +179,17 @@ document.addEventListener('DOMContentLoaded', () => {
     event.preventDefault();
     const tokenInput = document.getElementById('token');
     const fileInput = document.getElementById('photo');
+    const submitBtn = uploadForm.querySelector('button[type="submit"]');
     const token = tokenInput.value.trim();
     const files = Array.from(fileInput.files || []);
     if (!files.length) {
       showToast('Please select image(s) to upload', true);
       return;
     }
+    
+    // Disable submit button during upload
+    submitBtn.disabled = true;
+    
     const formData = new FormData();
     for (const f of files) {
       formData.append('photo', f);
@@ -219,6 +224,10 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(error => {
         const message = error && error.error ? error.error : 'Upload failed';
         showToast(message, true);
+      })
+      .finally(() => {
+        // Re-enable submit button
+        submitBtn.disabled = false;
       });
   });
 

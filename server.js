@@ -350,6 +350,8 @@ app.get('/files/thumbs/:name', async (req, res) => {
         const thumbName = `${base}.thumb.jpg`;
         const thumbPath = path.join(THUMBS_DIR, thumbName);
         try {
+          // Ensure thumbs directory exists
+          fs.mkdirSync(THUMBS_DIR, { recursive: true });
           await sharp(originalPath)
             .rotate() // respect EXIF orientation
             .resize({ width: 450 })
@@ -410,6 +412,8 @@ app.post('/api/upload', uploadLimiter, upload.array('photo', MAX_FILES_PER_UPLOA
         const thumbName = `${base}.thumb.jpg`;
         const thumbPath = path.join(THUMBS_DIR, thumbName);
         try {
+          // Ensure thumbs directory exists
+          fs.mkdirSync(THUMBS_DIR, { recursive: true });
           await sharp(file.buffer)
             .rotate() // Apply EXIF orientation automatically
             .resize({ width: 450 })
