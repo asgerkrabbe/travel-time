@@ -283,31 +283,54 @@ app.get('/files/:name', (req, res) => {
   });
 });
 
-// Endpoint to serve thumbnails
-app.get('/files/thumbs/:name', (req, res) => {
-  const inputName = req.params.name;
-  const ext = path.extname(inputName).toLowerCase();
-  if (!VALID_EXTENSIONS.includes(ext)) {
+// Endpoint to serve thumbnails (with on-demand generation if missing)
+app.get('/files/thumbs/:name', async (req, res) => {
+  try {
+    const inputName = req.params.name;
+    const ext = path.extname(inputName).toLowerCase();
+    if (!VALID_EXTENSIONS.includes(ext)) {
+      return res.status(404).send('Not found');
+    }
+    // If a direct thumbnail file is requested and exists, serve it.
+    const directThumbPath = path.join(THUMBS_DIR, inputName);
+    if (fs.existsSync(directThumbPath) && fs.statSync(directThumbPath).isFile()) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.sendFile(directThumbPath);
+    }
+    // Otherwise, treat inputName as the ORIGINAL filename and try to map to a thumb
+    const base = path.basename(inputName, ext);
+    const candidates = [
+      path.join(THUMBS_DIR, `${base}.thumb.jpg`), // new pattern
+      path.join(THUMBS_DIR, `${base}.jpg`) // legacy pattern
+    ];
+    const existing = candidates.find(p => fs.existsSync(p) && fs.statSync(p).isFile());
+    if (existing) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.sendFile(existing);
+    }
+    // On-demand generation: if original exists, create the thumb and serve it
+    const originalPath = path.join(PHOTO_DIR, inputName);
+    if (fs.existsSync(originalPath) && fs.statSync(originalPath).isFile()) {
+      const thumbName = `${base}.thumb.jpg`;
+      const thumbPath = path.join(THUMBS_DIR, thumbName);
+      try {
+        await sharp(originalPath)
+          .rotate() // respect EXIF orientation
+          .resize({ width: 450 })
+          .jpeg({ quality: 80 })
+          .toFile(thumbPath);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        return res.sendFile(thumbPath);
+      } catch (genErr) {
+        console.error('Error generating thumbnail on-demand:', genErr);
+        return res.status(500).send('Error generating thumbnail');
+      }
+    }
     return res.status(404).send('Not found');
+  } catch (err) {
+    console.error('Error serving thumbnail:', err);
+    return res.status(500).send('Unexpected error');
   }
-  // If a direct thumbnail file is requested and exists, serve it.
-  const directThumbPath = path.join(THUMBS_DIR, inputName);
-  if (fs.existsSync(directThumbPath) && fs.statSync(directThumbPath).isFile()) {
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    return res.sendFile(directThumbPath);
-  }
-  // Otherwise, treat inputName as the ORIGINAL filename and try to map to a thumb
-  const base = path.basename(inputName, ext);
-  const candidates = [
-    path.join(THUMBS_DIR, `${base}.thumb.jpg`), // new pattern
-    path.join(THUMBS_DIR, `${base}.jpg`) // legacy pattern
-  ];
-  const existing = candidates.find(p => fs.existsSync(p) && fs.statSync(p).isFile());
-  if (!existing) {
-    return res.status(404).send('Not found');
-  }
-  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-  return res.sendFile(existing);
 });
 
 // Upload endpoint. Requires a valid Bearer token in the Authorization header.
@@ -348,6 +371,7 @@ app.post('/api/upload', uploadLimiter, upload.array('photo', MAX_FILES_PER_UPLOA
         const thumbPath = path.join(THUMBS_DIR, thumbName);
         try {
           await sharp(file.buffer)
+            .rotate() // Apply EXIF orientation automatically
             .resize({ width: 450 })
             .jpeg({ quality: 80 })
             .toFile(thumbPath);
