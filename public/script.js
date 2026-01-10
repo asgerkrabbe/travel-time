@@ -46,10 +46,16 @@ document.addEventListener('DOMContentLoaded', () => {
         let photoDate = null;
         if (dateTaken) {
           photoDate = new Date(dateTaken);
-          const day = String(photoDate.getDate()).padStart(2, '0');
-          const month = String(photoDate.getMonth() + 1).padStart(2, '0');
-          const year = photoDate.getFullYear();
-          dateLabel = `${day}/${month}/${year}`;
+          // Validate that the date is valid
+          if (!isNaN(photoDate.getTime())) {
+            const day = String(photoDate.getDate()).padStart(2, '0');
+            const month = String(photoDate.getMonth() + 1).padStart(2, '0');
+            const year = photoDate.getFullYear();
+            dateLabel = `${day}/${month}/${year}`;
+          } else {
+            // Invalid date, reset photoDate to null
+            photoDate = null;
+          }
         }
 
         // Insert month/year divider if month changed

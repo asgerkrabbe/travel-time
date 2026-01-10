@@ -21,6 +21,7 @@ const PHOTO_DIR = process.env.PHOTO_DIR || path.join(__dirname, 'photos');
 const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || 'changeme';
 const MAX_FILE_BYTES = process.env.MAX_FILE_BYTES ? parseInt(process.env.MAX_FILE_BYTES, 10) : 10 * 1024 * 1024; // 10 MB
 const MAX_FILES_PER_UPLOAD = process.env.MAX_FILES_PER_UPLOAD ? parseInt(process.env.MAX_FILES_PER_UPLOAD, 10) : 10; // per request
+const EXIF_BUFFER_SIZE = 65536; // 64KB, sufficient for EXIF headers in most images
 
 // Allowed file extensions for uploaded/served images
 const VALID_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
@@ -138,8 +139,17 @@ app.get('/api/photos', async (req, res) => {
       let dateMs = null;
       let source = null;
       try {
-        // First try parsing EXIF directly from the full file buffer
-        const fileBuf = await fs.promises.readFile(fullPath);
+        // Read only the first 64KB for EXIF headers (sufficient for most images)
+        const fileHandle = await fs.promises.open(fullPath, 'r');
+        let fileBuf;
+        try {
+          const buffer = Buffer.alloc(EXIF_BUFFER_SIZE);
+          const { bytesRead } = await fileHandle.read(buffer, 0, EXIF_BUFFER_SIZE, 0);
+          fileBuf = buffer.slice(0, bytesRead);
+        } finally {
+          await fileHandle.close();
+        }
+        
         try {
           const parsed = exifParser.create(fileBuf).parse();
           const tags = parsed && parsed.tags ? parsed.tags : {};
@@ -157,7 +167,8 @@ app.get('/api/photos', async (req, res) => {
             else if (typeof val === 'string') {
               const m = val.match(/^([0-9]{4}):([0-9]{2}):([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2})$/);
               if (m) {
-                const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`;
+                // EXIF dates are in local time, not UTC
+                const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`;
                 ts = Date.parse(iso);
               }
             }
@@ -185,7 +196,10 @@ app.get('/api/photos', async (req, res) => {
                 else if (v instanceof Date) ts2 = +v;
                 else if (typeof v === 'string') {
                   const m = v.match(/^([0-9]{4}):([0-9]{2}):([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2})$/);
-                  if (m) ts2 = Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`);
+                  if (m) {
+                    // EXIF dates are in local time, not UTC
+                    ts2 = Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`);
+                  }
                 }
               }
               if (typeof ts2 === 'number' && ts2 > 0) {
@@ -215,13 +229,19 @@ app.get('/api/photos', async (req, res) => {
       return { dateMs, source };
     }
 
-    // Collect date info for sorting
-    const withDates = await Promise.all(
-      originals.map(async f => {
-        const info = await getDateInfoFor(f);
-        return { file: f, dateMs: info.dateMs, source: info.source };
-      })
-    );
+    // Collect date info for sorting with concurrency limit
+    const CONCURRENCY_LIMIT = 10;
+    const withDates = [];
+    for (let i = 0; i < originals.length; i += CONCURRENCY_LIMIT) {
+      const batch = originals.slice(i, i + CONCURRENCY_LIMIT);
+      const batchResults = await Promise.all(
+        batch.map(async f => {
+          const info = await getDateInfoFor(f);
+          return { file: f, dateMs: info.dateMs, source: info.source };
+        })
+      );
+      withDates.push(...batchResults);
+    }
 
     // Sort newest to oldest by dateMs descending
     withDates.sort((a, b) => b.dateMs - a.dateMs);
@@ -293,39 +313,59 @@ app.get('/files/thumbs/:name', async (req, res) => {
     }
     // If a direct thumbnail file is requested and exists, serve it.
     const directThumbPath = path.join(THUMBS_DIR, inputName);
-    if (fs.existsSync(directThumbPath) && fs.statSync(directThumbPath).isFile()) {
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      return res.sendFile(directThumbPath);
+    try {
+      const directStats = await fs.promises.stat(directThumbPath);
+      if (directStats.isFile()) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        return res.sendFile(directThumbPath);
+      }
+    } catch (err) {
+      // File doesn't exist, continue to mapping logic
     }
+    
     // Otherwise, treat inputName as the ORIGINAL filename and try to map to a thumb
     const base = path.basename(inputName, ext);
     const candidates = [
       path.join(THUMBS_DIR, `${base}.thumb.jpg`), // new pattern
       path.join(THUMBS_DIR, `${base}.jpg`) // legacy pattern
     ];
-    const existing = candidates.find(p => fs.existsSync(p) && fs.statSync(p).isFile());
-    if (existing) {
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      return res.sendFile(existing);
-    }
-    // On-demand generation: if original exists, create the thumb and serve it
-    const originalPath = path.join(PHOTO_DIR, inputName);
-    if (fs.existsSync(originalPath) && fs.statSync(originalPath).isFile()) {
-      const thumbName = `${base}.thumb.jpg`;
-      const thumbPath = path.join(THUMBS_DIR, thumbName);
+    
+    for (const candidatePath of candidates) {
       try {
-        await sharp(originalPath)
-          .rotate() // respect EXIF orientation
-          .resize({ width: 450 })
-          .jpeg({ quality: 80 })
-          .toFile(thumbPath);
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        return res.sendFile(thumbPath);
-      } catch (genErr) {
-        console.error('Error generating thumbnail on-demand:', genErr);
-        return res.status(500).send('Error generating thumbnail');
+        const candidateStats = await fs.promises.stat(candidatePath);
+        if (candidateStats.isFile()) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          return res.sendFile(candidatePath);
+        }
+      } catch (err) {
+        // Continue to next candidate
       }
     }
+    
+    // On-demand generation: if original exists, create the thumb and serve it
+    const originalPath = path.join(PHOTO_DIR, inputName);
+    try {
+      const originalStats = await fs.promises.stat(originalPath);
+      if (originalStats.isFile()) {
+        const thumbName = `${base}.thumb.jpg`;
+        const thumbPath = path.join(THUMBS_DIR, thumbName);
+        try {
+          await sharp(originalPath)
+            .rotate() // respect EXIF orientation
+            .resize({ width: 450 })
+            .jpeg({ quality: 80 })
+            .toFile(thumbPath);
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          return res.sendFile(thumbPath);
+        } catch (genErr) {
+          console.error('Error generating thumbnail on-demand:', genErr);
+          return res.status(500).send('Error generating thumbnail');
+        }
+      }
+    } catch (err) {
+      // Original doesn't exist
+    }
+    
     return res.status(404).send('Not found');
   } catch (err) {
     console.error('Error serving thumbnail:', err);
