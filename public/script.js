@@ -30,6 +30,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch the list of image filenames and render them into the gallery.
   async function loadGallery() {
     try {
+      // Clear preload cache when reloading gallery
+      Object.keys(preloadedImages).forEach(key => delete preloadedImages[key]);
+      
       const response = await fetch(`${prefix}/api/photos?meta=1`);
       if (!response.ok) {
         throw new Error('Failed to fetch photos');
@@ -48,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
       allImages = []; // Reset images array
       let lastMonthYear = null;
       
-      items.forEach(item => {
+      items.forEach((item, index) => {
         const original = item && typeof item.original === 'string' ? item.original : String(item);
         const thumb = item && typeof item.thumb === 'string' ? item.thumb : null;
         const dateTaken = item && typeof item.date_taken === 'string' ? item.date_taken : null;
@@ -111,10 +114,10 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         // Open full original in lightbox
         const originalUrl = `${prefix}/files/${encodeURIComponent(original)}`;
-        img.addEventListener('click', () => openImageModal(originalUrl, img.alt, items.indexOf(item)));
+        img.addEventListener('click', () => openImageModal(originalUrl, img.alt, index));
         img.addEventListener('keydown', e => {
           if (e.key === 'Enter' || e.key === ' ') {
-            openImageModal(originalUrl, img.alt, items.indexOf(item));
+            openImageModal(originalUrl, img.alt, index);
           }
         });
 
@@ -125,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Delete button (only visible in delete mode)
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'delete-btn';
-        deleteBtn.innerHTML = '&times;';
+        deleteBtn.innerHTML = '<svg class="icon-delete" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/><path d="M10 11v6m4-6v6"/></svg>';
         deleteBtn.title = 'Delete photo';
         deleteBtn.setAttribute('aria-label', 'Delete photo');
         deleteBtn.addEventListener('click', (e) => {
@@ -201,14 +204,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const tokenInput = document.getElementById('token');
     let token = tokenInput ? tokenInput.value.trim() : '';
     
-    // If token input is empty, prompt user
+    // If token input is empty, guide user to enter token in the upload form
     if (!token) {
-      token = prompt('Enter your upload token to delete photos:');
-      if (!token) {
-        showToast('Delete cancelled', false);
-        closeConfirmModal();
-        return;
+      showToast('Enter your upload token in the upload form before deleting photos', true);
+      if (modalEl) {
+        modalEl.classList.remove('hidden');
+        modalEl.setAttribute('aria-hidden', 'false');
       }
+      if (tokenInput) {
+        tokenInput.focus();
+      }
+      closeConfirmModal();
+      return;
     }
 
     try {
@@ -220,23 +227,73 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Delete failed');
+        let message = 'Delete failed';
+        try {
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const errorBody = await response.json();
+            if (errorBody && typeof errorBody.error === 'string' && errorBody.error.trim()) {
+              message = errorBody.error;
+            }
+          } else {
+            const text = await response.text();
+            if (text && text.trim()) {
+              message = text;
+            }
+          }
+        } catch (parseErr) {
+          // Ignore parsing errors and fall back to default message
+        }
+        throw new Error(message);
       }
 
       const result = await response.json();
-      showToast('Photo deleted successfully', false);
+      
+      // Use API response flags to provide more specific feedback
+      if (result && result.photo_deleted && result.thumbnail_deleted) {
+        showToast('Photo deleted successfully', false);
+      } else if (result && result.photo_deleted && result.thumbnail_deleted === false) {
+        showToast('Photo deleted, but the thumbnail could not be deleted.', false);
+        // Log details for debugging/monitoring partial failures
+        console.warn('Thumbnail deletion failed for photo:', photoToDelete, result);
+      } else if (result && result.photo_deleted) {
+        // Fallback for unexpected combinations of flags
+        showToast('Photo deleted (thumbnail status unknown).', false);
+        console.warn('Unexpected delete response for photo:', photoToDelete, result);
+      } else {
+        // If we reach here with ok=true but no photo_deleted flag, keep generic success
+        showToast('Photo deleted successfully', false);
+      }
+      
       closeConfirmModal();
       
       // Remove photo from gallery with animation
-      const photoItem = document.querySelector(`.photo-item[data-filename="${photoToDelete}"]`);
+      const safeFilename = (window.CSS && typeof window.CSS.escape === 'function')
+        ? window.CSS.escape(photoToDelete)
+        : photoToDelete;
+      const photoItem = document.querySelector(`.photo-item[data-filename="${safeFilename}"]`);
       if (photoItem) {
         photoItem.style.opacity = '0';
         photoItem.style.transform = 'scale(0.8)';
         setTimeout(() => {
+          // Check if the currently displayed image in modal is the deleted photo
+          if (imageModal.getAttribute('aria-hidden') === 'false' && 
+              currentImageIndex >= 0 && 
+              allImages[currentImageIndex] && 
+              allImages[currentImageIndex].original === photoToDelete) {
+            // Close the modal if viewing the deleted photo
+            closeImageModalFunc();
+          }
           loadGallery();
         }, 300);
       } else {
+        // Check if viewing deleted photo even if not found in DOM
+        if (imageModal.getAttribute('aria-hidden') === 'false' && 
+            currentImageIndex >= 0 && 
+            allImages[currentImageIndex] && 
+            allImages[currentImageIndex].original === photoToDelete) {
+          closeImageModalFunc();
+        }
         loadGallery();
       }
     } catch (err) {
@@ -426,6 +483,26 @@ document.addEventListener('DOMContentLoaded', () => {
   cancelDeleteBtn.addEventListener('click', () => {
     closeConfirmModal();
   });
+  
+  // Close confirmation modal on Escape key
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' || event.key === 'Esc') {
+      // Only close if the confirmation modal is currently visible
+      if (confirmModal && confirmModal.getAttribute('aria-hidden') === 'false') {
+        closeConfirmModal();
+      }
+    }
+  });
+
+  // Close confirmation modal when clicking outside the modal content
+  if (confirmModal) {
+    confirmModal.addEventListener('click', (event) => {
+      // Close when clicking the backdrop (not the modal content)
+      if (event.target === confirmModal) {
+        closeConfirmModal();
+      }
+    });
+  }
 
   // Close image modal on close button click
   closeImageModal.addEventListener('click', closeImageModalFunc);

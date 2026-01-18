@@ -390,6 +390,32 @@ const deleteFailedAttempts = new Map();
 const DELETE_FAIL_WINDOW = 12 * 60 * 60 * 1000; // 12 hours
 const DELETE_FAIL_MAX = 3;
 
+// Periodic cleanup of old entries in deleteFailedAttempts Map (every hour)
+setInterval(() => {
+  const now = Date.now();
+  const keysToDelete = [];
+  
+  for (const [ip, attempts] of deleteFailedAttempts.entries()) {
+    // Filter out old attempts
+    const recentAttempts = attempts.filter(timestamp => now - timestamp < DELETE_FAIL_WINDOW);
+    
+    if (recentAttempts.length === 0) {
+      // No recent attempts, mark for deletion
+      keysToDelete.push(ip);
+    } else if (recentAttempts.length < attempts.length) {
+      // Some attempts expired, update the map
+      deleteFailedAttempts.set(ip, recentAttempts);
+    }
+  }
+  
+  // Remove IPs with no recent attempts
+  keysToDelete.forEach(ip => deleteFailedAttempts.delete(ip));
+  
+  if (keysToDelete.length > 0) {
+    console.log(`Cleaned up ${keysToDelete.length} expired entries from deleteFailedAttempts`);
+  }
+}, 60 * 60 * 1000); // Run every hour
+
 function checkDeleteAuthFailures(ip) {
   const now = Date.now();
   if (!deleteFailedAttempts.has(ip)) {
@@ -449,12 +475,14 @@ app.delete('/api/photos/:filename', deleteSuccessLimiter, async (req, res) => {
     const filename = req.params.filename;
     const ext = path.extname(filename).toLowerCase();
     if (!VALID_EXTENSIONS.includes(ext)) {
+      req.deleteAuthFailed = true;
       return res.status(400).json({ error: 'Invalid file type' });
     }
 
     // Prevent path traversal attacks
     const sanitized = path.basename(filename);
     if (sanitized !== filename) {
+      req.deleteAuthFailed = true;
       return res.status(400).json({ error: 'Invalid filename' });
     }
 
@@ -475,6 +503,7 @@ app.delete('/api/photos/:filename', deleteSuccessLimiter, async (req, res) => {
       console.log(`Deleted photo: ${filename}`);
     } catch (err) {
       if (err.code === 'ENOENT') {
+        req.deleteAuthFailed = true;
         return res.status(404).json({ error: 'Photo not found' });
       }
       throw err;
