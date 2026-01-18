@@ -49,6 +49,7 @@ header {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  gap: 0.75rem;
 }
 
 .title {
@@ -82,6 +83,19 @@ header {
   border-color: #ff6b9d;
   transform: scale(1.05);
   box-shadow: 0 6px 20px rgba(233, 69, 96, 0.3);
+}
+
+.icon-btn.active {
+  background: linear-gradient(135deg, #e94560 0%, #f85f7f 100%);
+  border-color: #ff6b9d;
+  box-shadow: 0 6px 20px rgba(233, 69, 96, 0.3);
+}
+
+#uploadButton:hover {
+  background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+  border-color: #1abc9c;
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(46, 204, 113, 0.3);
 }
 
 main {
@@ -119,6 +133,7 @@ main {
   margin: 0;
   cursor: pointer;
   transition: all 0.3s ease;
+  position: relative;
 }
 
 .photo-item:hover {
@@ -151,6 +166,52 @@ main {
   margin-top: 0.75rem;
   text-align: center;
   letter-spacing: 0.3px;
+}
+
+/* Delete button styles */
+.delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(233, 69, 96, 0.95);
+  border: 2px solid #fff;
+  color: #fff;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+}
+
+.delete-btn:hover {
+  background: #c73647;
+  transform: scale(1.1);
+  box-shadow: 0 6px 18px rgba(233, 69, 96, 0.4);
+}
+
+/* Show delete buttons when in delete mode */
+body.delete-mode .delete-btn {
+  display: flex;
+  animation: fadeIn 0.3s ease;
+}
+
+body.delete-mode .photo-item:hover {
+  transform: translateY(-4px);
+}
+
+body.delete-mode .photo-item img {
+  opacity: 0.85;
+}
+
+body.delete-mode .photo-item:hover img {
+  opacity: 1;
 }
 
 /* Modal styles */
@@ -254,6 +315,17 @@ main {
 .btn-secondary:hover {
   background: #e8e8e8;
   transform: translateY(-2px);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #e94560 0%, #f85f7f 100%);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(233, 69, 96, 0.2);
+}
+.btn-danger:hover {
+  background: linear-gradient(135deg, #c73647 0%, #e94560 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(233, 69, 96, 0.4);
 }
 
 /* Form styling */
@@ -381,10 +453,107 @@ input[type="password"]:focus {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
 }
 
+/* Navigation buttons in image modal */
+.nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.9);
+  color: #1a1a1a;
+  border: none;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 3;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.nav-btn:hover {
+  background: #fff;
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+
+.nav-prev {
+  left: 1rem;
+}
+
+.nav-next {
+  right: 1rem;
+}
+
+@media (max-width: 768px) {
+  .nav-btn {
+    width: 3rem;
+    height: 3rem;
+  }
+  
+  .nav-prev {
+    left: 0.5rem;
+  }
+
+  .nav-next {
+    right: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  
+  .nav-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .nav-prev {
+    left: 0.25rem;
+  }
+
+  .nav-next {
+    right: 0.25rem;
+  }
+}
+
+/* Confirmation modal specific styles */
+.confirm-modal-content {
+  max-width: 400px;
+  text-align: center;
+}
+
+.confirm-modal-content h2 {
+  color: #1a1a1a;
+  font-size: 1.3rem;
+  margin-bottom: 2rem;
+}
+
+.confirm-modal-content .modal-buttons {
+  justify-content: center;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .header-bar {
-    padding: 0 1rem;
+    padding: 0 0.5rem;
+  }
+
+  .header-left {
+    flex: 0.2;
+  }
+
+  .header-center {
+    flex: 3;
+  }
+
+  .header-right {
+    flex: 0.8;
   }
 
   .title {
@@ -408,6 +577,32 @@ input[type="password"]:focus {
 }
 
 @media (max-width: 480px) {
+  .header-bar {
+    padding: 0 0.25rem;
+  }
+
+  .header-left {
+    flex: 0.1;
+  }
+
+  .header-center {
+    flex: 4;
+  }
+
+  .header-right {
+    flex: 0.9;
+    gap: 0.5rem;
+  }
+
+  .title {
+    font-size: 1.3rem;
+  }
+
+  .icon-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
   .gallery {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 1rem;

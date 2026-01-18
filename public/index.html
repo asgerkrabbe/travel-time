@@ -17,6 +17,12 @@
         <h1 class="title">Krabbe & Laura swagger gennem Asien</h1>
       </div>
       <div class="header-right">
+        <button id="deleteToggle" class="icon-btn delete-toggle" aria-label="Delete mode" title="Toggle delete mode">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M10 11v6m4-6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
         <button id="uploadButton" class="icon-btn" aria-label="Upload" title="Upload (U)">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M12 3v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -55,7 +61,27 @@
   <div id="imageModal" class="modal hidden" aria-hidden="true">
     <div class="modal-content image-modal-content" role="dialog" aria-modal="true" aria-label="Image preview">
       <button type="button" id="closeImageModal" class="close-btn" aria-label="Close image preview" title="Close">&times;</button>
+      <button type="button" id="prevImage" class="nav-btn nav-prev" aria-label="Previous image" title="Previous (←)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
       <img id="modalImage" src="" alt="Preview" class="modal-image" />
+      <button type="button" id="nextImage" class="nav-btn nav-next" aria-label="Next image" title="Next (→)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </button>
+    </div>
+  </div>
+  <!-- Confirmation modal -->
+  <div id="confirmModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-content confirm-modal-content" role="dialog" aria-modal="true" aria-labelledby="confirmMessage">
+      <h2 id="confirmMessage">Delete this photo?</h2>
+      <div class="modal-buttons">
+        <button type="button" id="confirmDelete" class="btn btn-danger">Delete</button>
+        <button type="button" id="cancelDelete" class="btn btn-secondary">Cancel</button>
+      </div>
     </div>
   </div>
   <script src="script.js"></script>
