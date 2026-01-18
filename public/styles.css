@@ -94,6 +94,7 @@ header {
 #uploadButton:hover {
   background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
   border-color: #1abc9c;
+  transform: scale(1.05);
   box-shadow: 0 6px 20px rgba(46, 204, 113, 0.3);
 }
 
