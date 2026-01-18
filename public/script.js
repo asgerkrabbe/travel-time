@@ -370,7 +370,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const tokenInput = document.getElementById('token');
     const fileInput = document.getElementById('photo');
-    const submitBtn = uploadForm.querySelector('button[type="submit"]');
     const token = tokenInput.value.trim();
     const files = Array.from(fileInput.files || []);
     if (!files.length) {
@@ -378,10 +377,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (submitBtn) submitBtn.disabled = false;
       return;
     }
-    
-    // Disable submit button during upload
-    submitBtn.disabled = true;
-    
     const formData = new FormData();
     for (const f of files) {
       formData.append('photo', f);
