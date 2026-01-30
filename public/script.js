@@ -21,11 +21,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancelDeleteBtn = document.getElementById('cancelDelete');
   const confirmMessage = document.getElementById('confirmMessage');
 
+  const mobileQuery = window.matchMedia('(max-width: 768px), (hover: none) and (pointer: coarse)');
+
   let deleteMode = false;
   let photoToDelete = null;
   let currentImageIndex = -1;
   let allImages = [];
   const preloadedImages = {}; // Cache for preloaded images
+
+  function updateMobileClass() {
+    document.body.classList.toggle('is-mobile', mobileQuery.matches);
+    if (imageModal && imageModal.getAttribute('aria-hidden') === 'false') {
+      updateNavButtons();
+    }
+  }
+
+  function isMobileView() {
+    return document.body.classList.contains('is-mobile');
+  }
 
   // Fetch the list of image filenames and render them into the gallery.
   async function loadGallery() {
@@ -331,6 +344,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const prevBtn = document.getElementById('prevImage');
     const nextBtn = document.getElementById('nextImage');
     if (prevBtn && nextBtn) {
+      if (isMobileView()) {
+        prevBtn.style.display = 'none';
+        nextBtn.style.display = 'none';
+        return;
+      }
       prevBtn.style.display = currentImageIndex > 0 ? 'flex' : 'none';
       nextBtn.style.display = currentImageIndex < allImages.length - 1 ? 'flex' : 'none';
     }
@@ -507,10 +525,31 @@ document.addEventListener('DOMContentLoaded', () => {
   // Close image modal on close button click
   closeImageModal.addEventListener('click', closeImageModalFunc);
 
-  // Close image modal on click outside image
+  // Close image modal on click outside the image (including modal padding)
   imageModal.addEventListener('click', e => {
-    if (e.target === imageModal) {
+    const clickedImage = e.target === modalImage;
+    const clickedClose = e.target === closeImageModal || closeImageModal.contains(e.target);
+    const clickedNav = e.target.closest('#prevImage, #nextImage');
+    if (!clickedImage && !clickedClose && !clickedNav) {
       closeImageModalFunc();
+    }
+  });
+
+  // Tap/click image edges to navigate on mobile/tablet
+  modalImage.addEventListener('click', event => {
+    if (!document.body.classList.contains('is-mobile')) {
+      return;
+    }
+    const rect = modalImage.getBoundingClientRect();
+    if (!rect.width) {
+      return;
+    }
+    const x = event.clientX - rect.left;
+    const edgeThreshold = rect.width * 0.25;
+    if (x <= edgeThreshold) {
+      showPreviousImage();
+    } else if (x >= rect.width - edgeThreshold) {
+      showNextImage();
     }
   });
 
@@ -558,5 +597,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Initial load
+  updateMobileClass();
+  if (typeof mobileQuery.addEventListener === 'function') {
+    mobileQuery.addEventListener('change', updateMobileClass);
+  } else if (typeof mobileQuery.addListener === 'function') {
+    mobileQuery.addListener(updateMobileClass);
+  }
   loadGallery();
 });
