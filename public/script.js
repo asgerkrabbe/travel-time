@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const galleryEl = document.getElementById('gallery');
   const uploadButton = document.getElementById('uploadButton');
   const deleteToggle = document.getElementById('deleteToggle');
+  const sortMethodSelect = document.getElementById('sortMethod');
+  const sortReverseBtn = document.getElementById('sortReverse');
   const modalEl = document.getElementById('modal');
   const closeModal = document.getElementById('closeModal');
   const cancelUpload = document.getElementById('cancelUpload');
@@ -20,12 +22,62 @@ document.addEventListener('DOMContentLoaded', () => {
   const confirmDeleteBtn = document.getElementById('confirmDelete');
   const cancelDeleteBtn = document.getElementById('cancelDelete');
   const confirmMessage = document.getElementById('confirmMessage');
+  const deleteTokenModal = document.getElementById('deleteTokenModal');
+  const deleteTokenForm = document.getElementById('deleteTokenForm');
+  const deleteTokenInput = document.getElementById('deleteToken');
+  const closeDeleteToken = document.getElementById('closeDeleteToken');
+  const cancelDeleteToken = document.getElementById('cancelDeleteToken');
+
+  const mobileQuery = window.matchMedia('(max-width: 768px), (hover: none) and (pointer: coarse)');
 
   let deleteMode = false;
   let photoToDelete = null;
   let currentImageIndex = -1;
   let allImages = [];
   const preloadedImages = {}; // Cache for preloaded images
+  let sortMethod = 'date-taken'; // 'date-taken' or 'date-uploaded'
+  let sortReverse = false; // false = newest first, true = oldest first
+
+  function updateMobileClass() {
+    document.body.classList.toggle('is-mobile', mobileQuery.matches);
+    if (imageModal && imageModal.getAttribute('aria-hidden') === 'false') {
+      updateNavButtons();
+    }
+  }
+
+  function isMobileView() {
+    return document.body.classList.contains('is-mobile');
+  }
+
+  // Sort items based on current sort method and direction
+  function sortItems(items) {
+    const sorted = [...items];
+    
+    if (sortMethod === 'date-taken') {
+      // Sort by date_taken (use filename as fallback for sorting when dates are missing)
+      sorted.sort((a, b) => {
+        const dateA = a.date_taken ? new Date(a.date_taken).getTime() : 0;
+        const dateB = b.date_taken ? new Date(b.date_taken).getTime() : 0;
+        if (dateA === dateB) {
+          return a.original.localeCompare(b.original);
+        }
+        return dateB - dateA; // Descending by default (newest first)
+      });
+    } else if (sortMethod === 'date-uploaded') {
+      // Sort by upload date (extracted from filename timestamp)
+      sorted.sort((a, b) => {
+        const extractTimestamp = (filename) => {
+          const match = filename.match(/^(\d{14,15})/);
+          return match ? match[1] : '0';
+        };
+        const tsA = extractTimestamp(a.original);
+        const tsB = extractTimestamp(b.original);
+        return tsB.localeCompare(tsA); // Descending by default (newest first)
+      });
+    }
+    
+    return sortReverse ? sorted.reverse() : sorted;
+  }
 
   // Fetch the list of image filenames and render them into the gallery.
   async function loadGallery() {
@@ -48,10 +100,13 @@ document.addEventListener('DOMContentLoaded', () => {
             : payload)
         : [];
       
+      // Apply sorting
+      const sortedItems = sortItems(items);
+      
       allImages = []; // Reset images array
       let lastMonthYear = null;
       
-      items.forEach((item, index) => {
+      sortedItems.forEach((item, index) => {
         const original = item && typeof item.original === 'string' ? item.original : String(item);
         const thumb = item && typeof item.thumb === 'string' ? item.thumb : null;
         const dateTaken = item && typeof item.date_taken === 'string' ? item.date_taken : null;
@@ -73,8 +128,8 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
 
-        // Insert month/year divider if month changed
-        if (photoDate) {
+        // Insert month/year divider if month changed (only when sorting by date-taken)
+        if (sortMethod === 'date-taken' && photoDate) {
           const monthYear = `${photoDate.getFullYear()}-${photoDate.getMonth()}`;
           if (monthYear !== lastMonthYear) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -191,30 +246,44 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Hide confirmation modal
-  function closeConfirmModal() {
-    photoToDelete = null;
+  function closeConfirmModal(clearSelection = true) {
+    if (clearSelection) {
+      photoToDelete = null;
+    }
     confirmModal.classList.add('hidden');
     confirmModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function openDeleteTokenModal() {
+    deleteTokenModal.classList.remove('hidden');
+    deleteTokenModal.setAttribute('aria-hidden', 'false');
+    if (deleteTokenInput) {
+      deleteTokenInput.focus();
+    }
+  }
+
+  function closeDeleteTokenModal(clearSelection = true) {
+    deleteTokenModal.classList.add('hidden');
+    deleteTokenModal.setAttribute('aria-hidden', 'true');
+    if (clearSelection) {
+      photoToDelete = null;
+    }
+    if (deleteTokenForm) {
+      deleteTokenForm.reset();
+    }
   }
 
   // Delete photo
   async function deletePhoto() {
     if (!photoToDelete) return;
 
-    const tokenInput = document.getElementById('token');
-    let token = tokenInput ? tokenInput.value.trim() : '';
+    const token = deleteTokenInput ? deleteTokenInput.value.trim() : '';
     
-    // If token input is empty, guide user to enter token in the upload form
+    // If token input is empty, prompt for delete token
     if (!token) {
-      showToast('Enter your upload token in the upload form before deleting photos', true);
-      if (modalEl) {
-        modalEl.classList.remove('hidden');
-        modalEl.setAttribute('aria-hidden', 'false');
-      }
-      if (tokenInput) {
-        tokenInput.focus();
-      }
-      closeConfirmModal();
+      showToast('Enter your delete token to continue', true);
+      closeConfirmModal(false);
+      openDeleteTokenModal();
       return;
     }
 
@@ -265,12 +334,16 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Photo deleted successfully', false);
       }
       
-      closeConfirmModal();
+      // Capture the filename before closing modals (which clear photoToDelete)
+      const deletedFilename = photoToDelete;
+      
+      closeConfirmModal(false);
+      closeDeleteTokenModal(false);
       
       // Remove photo from gallery with animation
       const safeFilename = (window.CSS && typeof window.CSS.escape === 'function')
-        ? window.CSS.escape(photoToDelete)
-        : photoToDelete;
+        ? window.CSS.escape(deletedFilename)
+        : deletedFilename;
       const photoItem = document.querySelector(`.photo-item[data-filename="${safeFilename}"]`);
       if (photoItem) {
         photoItem.style.opacity = '0';
@@ -280,10 +353,12 @@ document.addEventListener('DOMContentLoaded', () => {
           if (imageModal.getAttribute('aria-hidden') === 'false' && 
               currentImageIndex >= 0 && 
               allImages[currentImageIndex] && 
-              allImages[currentImageIndex].original === photoToDelete) {
+              allImages[currentImageIndex].original === deletedFilename) {
             // Close the modal if viewing the deleted photo
             closeImageModalFunc();
           }
+          // Clear photoToDelete after all operations are complete
+          photoToDelete = null;
           loadGallery();
         }, 300);
       } else {
@@ -291,14 +366,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (imageModal.getAttribute('aria-hidden') === 'false' && 
             currentImageIndex >= 0 && 
             allImages[currentImageIndex] && 
-            allImages[currentImageIndex].original === photoToDelete) {
+            allImages[currentImageIndex].original === deletedFilename) {
           closeImageModalFunc();
         }
+        // Clear photoToDelete after all operations are complete
+        photoToDelete = null;
         loadGallery();
       }
     } catch (err) {
       showToast(err.message || 'Error deleting photo', true);
-      closeConfirmModal();
+      closeConfirmModal(false);
+      // Don't close delete token modal on error so user can retry
     }
   }
 
@@ -331,6 +409,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const prevBtn = document.getElementById('prevImage');
     const nextBtn = document.getElementById('nextImage');
     if (prevBtn && nextBtn) {
+      if (isMobileView()) {
+        prevBtn.style.display = 'none';
+        nextBtn.style.display = 'none';
+        return;
+      }
       prevBtn.style.display = currentImageIndex > 0 ? 'flex' : 'none';
       nextBtn.style.display = currentImageIndex < allImages.length - 1 ? 'flex' : 'none';
     }
@@ -410,6 +493,25 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleDeleteMode();
   });
 
+  // Sort method change
+  if (sortMethodSelect) {
+    sortMethodSelect.addEventListener('change', (e) => {
+      sortMethod = e.target.value;
+      loadGallery();
+    });
+  }
+
+  // Sort reverse toggle
+  if (sortReverseBtn) {
+    // Set initial state
+    sortReverseBtn.classList.toggle('active', sortReverse);
+    sortReverseBtn.addEventListener('click', () => {
+      sortReverse = !sortReverse;
+      sortReverseBtn.classList.toggle('active', sortReverse);
+      loadGallery();
+    });
+  }
+
   // Hide modal on close and cancel click
   if (closeModal) {
     closeModal.addEventListener('click', closeModalFunc);
@@ -483,6 +585,25 @@ document.addEventListener('DOMContentLoaded', () => {
   cancelDeleteBtn.addEventListener('click', () => {
     closeConfirmModal();
   });
+
+  if (closeDeleteToken) {
+    closeDeleteToken.addEventListener('click', () => {
+      closeDeleteTokenModal();
+    });
+  }
+
+  if (cancelDeleteToken) {
+    cancelDeleteToken.addEventListener('click', () => {
+      closeDeleteTokenModal();
+    });
+  }
+
+  if (deleteTokenForm) {
+    deleteTokenForm.addEventListener('submit', event => {
+      event.preventDefault();
+      deletePhoto();
+    });
+  }
   
   // Close confirmation modal on Escape key
   document.addEventListener('keydown', (event) => {
@@ -490,6 +611,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Only close if the confirmation modal is currently visible
       if (confirmModal && confirmModal.getAttribute('aria-hidden') === 'false') {
         closeConfirmModal();
+      }
+      if (deleteTokenModal && deleteTokenModal.getAttribute('aria-hidden') === 'false') {
+        closeDeleteTokenModal();
       }
     }
   });
@@ -504,13 +628,42 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  if (deleteTokenModal) {
+    deleteTokenModal.addEventListener('click', (event) => {
+      if (event.target === deleteTokenModal) {
+        closeDeleteTokenModal();
+      }
+    });
+  }
+
   // Close image modal on close button click
   closeImageModal.addEventListener('click', closeImageModalFunc);
 
-  // Close image modal on click outside image
+  // Close image modal on click outside the image (including modal padding)
   imageModal.addEventListener('click', e => {
-    if (e.target === imageModal) {
+    const clickedImage = e.target === modalImage;
+    const clickedClose = e.target === closeImageModal || closeImageModal.contains(e.target);
+    const clickedNav = e.target.closest('#prevImage, #nextImage');
+    if (!clickedImage && !clickedClose && !clickedNav) {
       closeImageModalFunc();
+    }
+  });
+
+  // Tap/click image edges to navigate on mobile/tablet
+  modalImage.addEventListener('click', event => {
+    if (!document.body.classList.contains('is-mobile')) {
+      return;
+    }
+    const rect = modalImage.getBoundingClientRect();
+    if (!rect.width) {
+      return;
+    }
+    const x = event.clientX - rect.left;
+    const edgeThreshold = rect.width * 0.25;
+    if (x <= edgeThreshold) {
+      showPreviousImage();
+    } else if (x >= rect.width - edgeThreshold) {
+      showNextImage();
     }
   });
 
@@ -558,5 +711,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Initial load
+  updateMobileClass();
+  if (typeof mobileQuery.addEventListener === 'function') {
+    mobileQuery.addEventListener('change', updateMobileClass);
+  } else if (typeof mobileQuery.addListener === 'function') {
+    mobileQuery.addListener(updateMobileClass);
+  }
   loadGallery();
 });
