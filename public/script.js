@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const galleryEl = document.getElementById('gallery');
   const uploadButton = document.getElementById('uploadButton');
   const deleteToggle = document.getElementById('deleteToggle');
+  const sortMethodSelect = document.getElementById('sortMethod');
+  const sortReverseBtn = document.getElementById('sortReverse');
   const modalEl = document.getElementById('modal');
   const closeModal = document.getElementById('closeModal');
   const cancelUpload = document.getElementById('cancelUpload');
@@ -28,6 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentImageIndex = -1;
   let allImages = [];
   const preloadedImages = {}; // Cache for preloaded images
+  let sortMethod = 'date-taken'; // 'date-taken' or 'date-uploaded'
+  let sortReverse = false; // false = newest first, true = oldest first
 
   function updateMobileClass() {
     document.body.classList.toggle('is-mobile', mobileQuery.matches);
@@ -38,6 +42,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function isMobileView() {
     return document.body.classList.contains('is-mobile');
+  }
+
+  // Sort items based on current sort method and direction
+  function sortItems(items) {
+    const sorted = [...items];
+    
+    if (sortMethod === 'date-taken') {
+      // Sort by date_taken (use filename as fallback for sorting when dates are missing)
+      sorted.sort((a, b) => {
+        const dateA = a.date_taken ? new Date(a.date_taken).getTime() : 0;
+        const dateB = b.date_taken ? new Date(b.date_taken).getTime() : 0;
+        if (dateA === dateB) {
+          return a.original.localeCompare(b.original);
+        }
+        return dateB - dateA; // Descending by default (newest first)
+      });
+    } else if (sortMethod === 'date-uploaded') {
+      // Sort by upload date (extracted from filename timestamp)
+      sorted.sort((a, b) => {
+        const extractTimestamp = (filename) => {
+          const match = filename.match(/^(\d{14,15})/);
+          return match ? match[1] : '0';
+        };
+        const tsA = extractTimestamp(a.original);
+        const tsB = extractTimestamp(b.original);
+        return tsB.localeCompare(tsA); // Descending by default (newest first)
+      });
+    }
+    
+    return sortReverse ? sorted.reverse() : sorted;
   }
 
   // Fetch the list of image filenames and render them into the gallery.
@@ -61,10 +95,13 @@ document.addEventListener('DOMContentLoaded', () => {
             : payload)
         : [];
       
+      // Apply sorting
+      const sortedItems = sortItems(items);
+      
       allImages = []; // Reset images array
       let lastMonthYear = null;
       
-      items.forEach((item, index) => {
+      sortedItems.forEach((item, index) => {
         const original = item && typeof item.original === 'string' ? item.original : String(item);
         const thumb = item && typeof item.thumb === 'string' ? item.thumb : null;
         const dateTaken = item && typeof item.date_taken === 'string' ? item.date_taken : null;
@@ -427,6 +464,25 @@ document.addEventListener('DOMContentLoaded', () => {
   deleteToggle.addEventListener('click', () => {
     toggleDeleteMode();
   });
+
+  // Sort method change
+  if (sortMethodSelect) {
+    sortMethodSelect.addEventListener('change', (e) => {
+      sortMethod = e.target.value;
+      loadGallery();
+    });
+  }
+
+  // Sort reverse toggle
+  if (sortReverseBtn) {
+    // Set initial state
+    sortReverseBtn.classList.toggle('active', sortReverse);
+    sortReverseBtn.addEventListener('click', () => {
+      sortReverse = !sortReverse;
+      sortReverseBtn.classList.toggle('active', sortReverse);
+      loadGallery();
+    });
+  }
 
   // Hide modal on close and cancel click
   if (closeModal) {

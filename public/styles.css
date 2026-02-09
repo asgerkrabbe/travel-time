@@ -44,12 +44,47 @@ header {
   min-width: 0;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
 .header-right {
   flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 0.75rem;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-right: 0.75rem;
+}
+
+.sort-select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.sort-select:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.sort-select option {
+  color: #16213e;
+  background: #fff;
 }
 
 .title {
@@ -84,7 +119,7 @@ header {
   box-shadow: 0 6px 20px rgba(233, 69, 96, 0.3);
 }
 
-.icon-btn.active {
+.icon-btn.delete-toggle.active {
   background: linear-gradient(135deg, #e94560 0%, #f85f7f 100%);
   border-color: #ff6b9d;
   box-shadow: 0 6px 20px rgba(233, 69, 96, 0.3);
@@ -95,6 +130,26 @@ header {
   border-color: #1abc9c;
   transform: scale(1.05);
   box-shadow: 0 6px 20px rgba(46, 204, 113, 0.3);
+}
+
+.icon-btn.sort-reverse-btn:hover {
+  background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+  border-color: #f1c40f;
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(243, 156, 18, 0.3);
+}
+
+.icon-btn.sort-reverse-btn.active {
+  background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+.icon-btn.sort-reverse-btn.active:hover {
+  background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+  border-color: #f1c40f;
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(243, 156, 18, 0.3);
 }
 
 main {
@@ -549,23 +604,33 @@ body.is-mobile .nav-btn {
 /* Responsive design */
 @media (max-width: 768px) {
   .header-bar {
-    padding: 0 0.5rem;
-  }
-
-  .header-left {
-    flex: 0.2;
+    padding: 0.75rem 0.5rem;
+    flex-direction: column;
+    gap: 0.75rem;
   }
 
   .header-center {
-    flex: 3;
+    width: 100%;
   }
 
-  .header-right {
-    flex: 0.8;
+  .header-actions {
+    width: 100%;
+    justify-content: center;
+    gap: 1rem;
+  }
+
+  .header-controls {
+    margin-right: 0;
   }
 
   .title {
-    font-size: 1.5rem;
+    font-size: 1.2rem;
+    text-align: center;
+  }
+
+  .sort-select {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.6rem;
   }
 
   main {

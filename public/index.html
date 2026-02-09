@@ -12,23 +12,34 @@
 <body>
   <header>
     <div class="header-bar">
-      <div class="header-left"></div>
       <div class="header-center">
         <h1 class="title">Krabbe & Laura swagger gennem Asien</h1>
       </div>
-      <div class="header-right">
-        <button id="deleteToggle" class="icon-btn delete-toggle" aria-label="Delete mode" title="Toggle delete mode">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M10 11v6m4-6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
-        <button id="uploadButton" class="icon-btn" aria-label="Upload" title="Upload (U)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 3v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M4 15v4h16v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
+      <div class="header-actions">
+        <div class="header-controls">
+          <select id="sortMethod" class="sort-select" aria-label="Sort by" title="Sort photos">
+            <option value="date-taken">Sort by Date Taken</option>
+            <option value="date-uploaded">Sort by Last Uploaded</option>
+          </select>
+          <button id="sortReverse" class="icon-btn sort-reverse-btn" aria-label="Reverse sort" title="Reverse sort order">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 4h7M3 9h10M3 14h10M3 19h7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M17 10l3-3m0 0l3 3m-3-3v7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button id="deleteToggle" class="icon-btn delete-toggle" aria-label="Delete mode" title="Toggle delete mode">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M10 11v6m4-6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button id="uploadButton" class="icon-btn" aria-label="Upload" title="Upload (U)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 15v4h16v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   </header>
