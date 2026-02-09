@@ -22,6 +22,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const confirmDeleteBtn = document.getElementById('confirmDelete');
   const cancelDeleteBtn = document.getElementById('cancelDelete');
   const confirmMessage = document.getElementById('confirmMessage');
+  const deleteTokenModal = document.getElementById('deleteTokenModal');
+  const deleteTokenForm = document.getElementById('deleteTokenForm');
+  const deleteTokenInput = document.getElementById('deleteToken');
+  const closeDeleteToken = document.getElementById('closeDeleteToken');
+  const cancelDeleteToken = document.getElementById('cancelDeleteToken');
 
   const mobileQuery = window.matchMedia('(max-width: 768px), (hover: none) and (pointer: coarse)');
 
@@ -241,30 +246,44 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Hide confirmation modal
-  function closeConfirmModal() {
-    photoToDelete = null;
+  function closeConfirmModal(clearSelection = true) {
+    if (clearSelection) {
+      photoToDelete = null;
+    }
     confirmModal.classList.add('hidden');
     confirmModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function openDeleteTokenModal() {
+    deleteTokenModal.classList.remove('hidden');
+    deleteTokenModal.setAttribute('aria-hidden', 'false');
+    if (deleteTokenInput) {
+      deleteTokenInput.focus();
+    }
+  }
+
+  function closeDeleteTokenModal(clearSelection = true) {
+    deleteTokenModal.classList.add('hidden');
+    deleteTokenModal.setAttribute('aria-hidden', 'true');
+    if (clearSelection) {
+      photoToDelete = null;
+    }
+    if (deleteTokenForm) {
+      deleteTokenForm.reset();
+    }
   }
 
   // Delete photo
   async function deletePhoto() {
     if (!photoToDelete) return;
 
-    const tokenInput = document.getElementById('token');
-    let token = tokenInput ? tokenInput.value.trim() : '';
+    const token = deleteTokenInput ? deleteTokenInput.value.trim() : '';
     
-    // If token input is empty, guide user to enter token in the upload form
+    // If token input is empty, prompt for delete token
     if (!token) {
-      showToast('Enter your upload token in the upload form before deleting photos', true);
-      if (modalEl) {
-        modalEl.classList.remove('hidden');
-        modalEl.setAttribute('aria-hidden', 'false');
-      }
-      if (tokenInput) {
-        tokenInput.focus();
-      }
-      closeConfirmModal();
+      showToast('Enter your delete token to continue', true);
+      closeConfirmModal(false);
+      openDeleteTokenModal();
       return;
     }
 
@@ -316,6 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       closeConfirmModal();
+      closeDeleteTokenModal();
       
       // Remove photo from gallery with animation
       const safeFilename = (window.CSS && typeof window.CSS.escape === 'function')
@@ -557,6 +577,25 @@ document.addEventListener('DOMContentLoaded', () => {
   cancelDeleteBtn.addEventListener('click', () => {
     closeConfirmModal();
   });
+
+  if (closeDeleteToken) {
+    closeDeleteToken.addEventListener('click', () => {
+      closeDeleteTokenModal();
+    });
+  }
+
+  if (cancelDeleteToken) {
+    cancelDeleteToken.addEventListener('click', () => {
+      closeDeleteTokenModal();
+    });
+  }
+
+  if (deleteTokenForm) {
+    deleteTokenForm.addEventListener('submit', event => {
+      event.preventDefault();
+      deletePhoto();
+    });
+  }
   
   // Close confirmation modal on Escape key
   document.addEventListener('keydown', (event) => {
@@ -564,6 +603,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Only close if the confirmation modal is currently visible
       if (confirmModal && confirmModal.getAttribute('aria-hidden') === 'false') {
         closeConfirmModal();
+      }
+      if (deleteTokenModal && deleteTokenModal.getAttribute('aria-hidden') === 'false') {
+        closeDeleteTokenModal();
       }
     }
   });
@@ -574,6 +616,14 @@ document.addEventListener('DOMContentLoaded', () => {
       // Close when clicking the backdrop (not the modal content)
       if (event.target === confirmModal) {
         closeConfirmModal();
+      }
+    });
+  }
+
+  if (deleteTokenModal) {
+    deleteTokenModal.addEventListener('click', (event) => {
+      if (event.target === deleteTokenModal) {
+        closeDeleteTokenModal();
       }
     });
   }

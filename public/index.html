@@ -95,6 +95,23 @@
       </div>
     </div>
   </div>
+  <!-- Delete token modal -->
+  <div id="deleteTokenModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="deleteTokenTitle">
+      <button type="button" id="closeDeleteToken" class="close-btn" aria-label="Close" title="Close">&times;</button>
+      <h2 id="deleteTokenTitle">Enter Delete Token</h2>
+      <form id="deleteTokenForm">
+        <label>
+          <span class="label">Secret Token</span>
+          <input type="password" id="deleteToken" name="deleteToken" placeholder="Bearer token" autocomplete="off" required>
+        </label>
+        <div class="modal-buttons">
+          <button type="submit" class="btn btn-danger">Continue Delete</button>
+          <button type="button" id="cancelDeleteToken" class="btn btn-secondary">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
   <script src="script.js"></script>
   <div id="toast" class="toast"></div>
 </body>
