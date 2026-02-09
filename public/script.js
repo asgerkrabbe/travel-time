@@ -128,8 +128,8 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
 
-        // Insert month/year divider if month changed
-        if (photoDate) {
+        // Insert month/year divider if month changed (only when sorting by date-taken)
+        if (sortMethod === 'date-taken' && photoDate) {
           const monthYear = `${photoDate.getFullYear()}-${photoDate.getMonth()}`;
           if (monthYear !== lastMonthYear) {
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -334,13 +334,16 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Photo deleted successfully', false);
       }
       
-      closeConfirmModal();
-      closeDeleteTokenModal();
+      // Capture the filename before closing modals (which clear photoToDelete)
+      const deletedFilename = photoToDelete;
+      
+      closeConfirmModal(false);
+      closeDeleteTokenModal(false);
       
       // Remove photo from gallery with animation
       const safeFilename = (window.CSS && typeof window.CSS.escape === 'function')
-        ? window.CSS.escape(photoToDelete)
-        : photoToDelete;
+        ? window.CSS.escape(deletedFilename)
+        : deletedFilename;
       const photoItem = document.querySelector(`.photo-item[data-filename="${safeFilename}"]`);
       if (photoItem) {
         photoItem.style.opacity = '0';
@@ -350,10 +353,12 @@ document.addEventListener('DOMContentLoaded', () => {
           if (imageModal.getAttribute('aria-hidden') === 'false' && 
               currentImageIndex >= 0 && 
               allImages[currentImageIndex] && 
-              allImages[currentImageIndex].original === photoToDelete) {
+              allImages[currentImageIndex].original === deletedFilename) {
             // Close the modal if viewing the deleted photo
             closeImageModalFunc();
           }
+          // Clear photoToDelete after all operations are complete
+          photoToDelete = null;
           loadGallery();
         }, 300);
       } else {
@@ -361,14 +366,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (imageModal.getAttribute('aria-hidden') === 'false' && 
             currentImageIndex >= 0 && 
             allImages[currentImageIndex] && 
-            allImages[currentImageIndex].original === photoToDelete) {
+            allImages[currentImageIndex].original === deletedFilename) {
           closeImageModalFunc();
         }
+        // Clear photoToDelete after all operations are complete
+        photoToDelete = null;
         loadGallery();
       }
     } catch (err) {
       showToast(err.message || 'Error deleting photo', true);
-      closeConfirmModal();
+      closeConfirmModal(false);
+      // Don't close delete token modal on error so user can retry
     }
   }
 
