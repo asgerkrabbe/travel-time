@@ -177,65 +177,38 @@ lowest overhead.
    The application will now be listening on `127.0.0.1:3000`.
 
 8. **Configure Nginx:** Place a reverse proxy in front of the Node.js server
-   for SSL termination, compression and client buffering. Below is a sample
-   Nginx server block (replace `example.com` with your domain):
+   for SSL termination, compression and client buffering. This repo ships a
+   ready-to-copy config at `deploy/nginx/photoapp.conf`, plus a shared TLS
+   snippet at `deploy/nginx/snippets/ssl-params.conf`, using the standard
+   `sites-available`/`sites-enabled` layout so that hosting a second, separate
+   app on the same box later never means editing this app's config:
 
-   ```nginx
-   server {
-       listen 80;
-       server_name example.com;
-
-       # Redirect HTTP to HTTPS (Let’s Encrypt handled separately)
-       return 301 https://$host$request_uri;
-   }
-
-   server {
-       listen 443 ssl;
-       server_name example.com;
-
-       # SSL configuration via certbot or your certificate provider
-       ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
-       ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
-
-       # Limit upload body size to match MAX_FILE_BYTES
-       client_max_body_size 10m;
-
-       location /api/upload {
-           # Optional: require HTTP Basic auth in addition to Bearer token
-           # auth_basic "Restricted";
-           # auth_basic_user_file /etc/nginx/.htpasswd;
-
-           proxy_pass         http://127.0.0.1:3000;
-           proxy_http_version 1.1;
-           proxy_set_header   Host $host;
-           proxy_set_header   X-Real-IP $remote_addr;
-           proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-           proxy_set_header   X-Forwarded-Proto $scheme;
-       }
-
-       location /files/ {
-           proxy_pass         http://127.0.0.1:3000;
-           proxy_cache_valid  200 30d;
-           add_header         Cache-Control "public, max-age=2592000, immutable";
-       }
-
-       location / {
-           proxy_pass         http://127.0.0.1:3000;
-           proxy_http_version 1.1;
-           proxy_set_header   Host $host;
-           proxy_set_header   X-Real-IP $remote_addr;
-           proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-           proxy_set_header   X-Forwarded-Proto $scheme;
-       }
-   }
+   ```bash
+   sudo cp deploy/nginx/snippets/ssl-params.conf /etc/nginx/snippets/
+   sudo cp deploy/nginx/photoapp.conf /etc/nginx/sites-available/photoapp
+   sudo $EDITOR /etc/nginx/sites-available/photoapp   # replace photoapp.example.com with your domain
+   sudo ln -s /etc/nginx/sites-available/photoapp /etc/nginx/sites-enabled/photoapp
+   sudo nginx -t && sudo systemctl reload nginx
    ```
 
-   After configuring Nginx, obtain an SSL certificate via certbot:
+   Then obtain an SSL certificate via certbot, which edits the site file's
+   `listen 443`/`ssl_certificate` lines in place:
 
    ```bash
    sudo apt install certbot python3-certbot-nginx
-   sudo certbot --nginx -d example.com
+   sudo certbot --nginx -d photoapp.example.com
    ```
+
+   **Hosting a second app on the same server:** because each app is its own
+   file under `sites-enabled/`, adding one is additive, not a rewrite of this
+   config. Give the new app its own local port (photoapp uses `127.0.0.1:3000`;
+   the next app could use `3001`), its own subdomain, and its own systemd
+   unit copied from `deploy/systemd/photoapp.service`. Then copy
+   `deploy/nginx/newapp.conf.example` into `sites-available/`, fill in the
+   domain and port placeholders, symlink it into `sites-enabled/`, reload
+   nginx, and run `certbot --nginx` for the new domain — photoapp's site file
+   and certificate are untouched throughout. See the comments in
+   `deploy/nginx/newapp.conf.example` for the full walkthrough.
 
 ### 2. Docker Deployment (optional)
 

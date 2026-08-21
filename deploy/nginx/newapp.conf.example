@@ -1,0 +1,62 @@
+# Template for adding a SECOND app to the same server, alongside photoapp.
+# Nginx already supports any number of independent server blocks on one
+# instance — each site here is just its own sites-available/ file that
+# never touches the others.
+#
+# To use this template:
+#
+#   1. Pick an unused local port for the new app to listen on (photoapp
+#      uses 127.0.0.1:3000 — e.g. use 3001, 3002, ... for the next ones).
+#      Set it in that app's own .env/PORT and have its process manager
+#      (systemd unit or docker-compose service) bind to 127.0.0.1 only,
+#      same as photoapp.service does.
+#
+#   2. Pick a subdomain for it (e.g. newapp.example.com) and point DNS at
+#      this server. Subdomain-per-app is the simplest routing: nginx
+#      dispatches purely on `server_name`, no path-rewriting needed. (A
+#      path prefix like example.com/newapp is possible too, but requires
+#      the new app to either be built to live under that prefix or for
+#      nginx to strip/rewrite it — more moving parts, so prefer a
+#      subdomain unless you have a reason not to.)
+#
+#   3. Copy this file into place and fill in the placeholders:
+#
+#        sudo cp deploy/nginx/newapp.conf.example /etc/nginx/sites-available/newapp
+#        sudo $EDITOR /etc/nginx/sites-available/newapp   # replace placeholders
+#        sudo ln -s /etc/nginx/sites-available/newapp /etc/nginx/sites-enabled/newapp
+#        sudo nginx -t && sudo systemctl reload nginx
+#        sudo certbot --nginx -d newapp.example.com
+#
+# photoapp.conf and this file are then two sibling files under
+# sites-enabled/ — reloading nginx or renewing certs for one never touches
+# the other, and removing an app is just deleting/unlinking its file.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name newapp.example.com;   # <-- replace with the new app's domain
+
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name newapp.example.com;   # <-- replace with the new app's domain
+
+    ssl_certificate     /etc/letsencrypt/live/newapp.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/newapp.example.com/privkey.pem;
+    include snippets/ssl-params.conf;   # shared with photoapp.conf — see snippets/ssl-params.conf
+
+    # Adjust to the new app's own max upload/body size, if it has one.
+    client_max_body_size 10m;
+
+    location / {
+        proxy_pass         http://127.0.0.1:3001;   # <-- the new app's port
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+}
