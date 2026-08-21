@@ -5,6 +5,9 @@ node_modules/
 .env
 .env.*
 
+# Scratch folder for hosting small ad-hoc files, not part of the app
+apps/
+
 # Logs
 logs/
 npm-debug.log*
