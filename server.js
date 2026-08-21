@@ -21,6 +21,8 @@ const PHOTO_DIR = process.env.PHOTO_DIR || path.join(__dirname, 'photos');
 const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || 'changeme';
 const MAX_FILE_BYTES = process.env.MAX_FILE_BYTES ? parseInt(process.env.MAX_FILE_BYTES, 10) : 10 * 1024 * 1024; // 10 MB
 const MAX_FILES_PER_UPLOAD = process.env.MAX_FILES_PER_UPLOAD ? parseInt(process.env.MAX_FILES_PER_UPLOAD, 10) : 10; // per request
+const DOWNLOAD_TOKEN = process.env.DOWNLOAD_TOKEN; // unguessable path segment for the /dl route below; unset disables the route
+const DOWNLOAD_FILE_PATH = process.env.DOWNLOAD_FILE_PATH; // absolute path to the file served at /dl/<DOWNLOAD_TOKEN>
 const EXIF_BUFFER_SIZE = 65536; // 64KB, sufficient for EXIF headers in most images
 
 // Allowed file extensions for uploaded/served images
@@ -600,6 +602,19 @@ app.post('/api/upload', uploadLimiter, upload.array('photo', MAX_FILES_PER_UPLOA
     return res.status(500).json({ error: 'Unexpected error during upload' });
   }
 });
+
+// One-off file download at an unguessable URL. The token is the access
+// control here (security by obscurity, not the UPLOAD_TOKEN scheme) — anyone
+// with this exact URL can download the file, so don't link it from anywhere
+// public. Regenerate DOWNLOAD_TOKEN in .env (crypto.randomBytes(24).toString('hex'))
+// to revoke access. Both values come from .env so the token is never committed.
+if (DOWNLOAD_TOKEN && DOWNLOAD_FILE_PATH) {
+  app.get(`/dl/${DOWNLOAD_TOKEN}`, (req, res) => {
+    res.download(DOWNLOAD_FILE_PATH, (err) => {
+      if (err) console.error('Download error:', err);
+    });
+  });
+}
 
 // Serve the static frontend assets from the `public` directory. The index
 // contains the gallery UI and upload modal.
