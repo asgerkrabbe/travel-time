@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { RotateCw, RotateCcw, Settings, X, BookOpen, Target } from "lucide-react";
+import { RotateCw, RotateCcw, Settings, X, BookOpen, Target, Info, ChevronDown } from "lucide-react";
 
 // ============================================================
 // Domain model
@@ -167,6 +167,7 @@ export default function VolleyballRotationTrainer() {
   const [score, setScore] = useState({ correct: 0, total: 0, streak: 0, best: 0 });
   const [liberoMode, setLiberoMode] = useState("MB"); // 'MB' | 'OH' | 'off'
   const [serving, setServing] = useState(true); // true = my team is serving, false = receiving
+  const [showFivbNote, setShowFivbNote] = useState(false);
 
   const learnMap = useMemo(() => buildPositionMap(offset, lineup), [offset, lineup]);
   const quizMap = useMemo(() => buildPositionMap(question.offset, lineup), [question.offset, lineup]);
@@ -547,11 +548,33 @@ export default function VolleyballRotationTrainer() {
 
             {serving && (
               <div
-                className="mb-3 px-3 py-2 rounded-lg text-xs"
+                className="mb-3 rounded-lg text-xs overflow-hidden"
                 style={{ backgroundColor: "#E7F1F6", color: "#1C4A63", border: "1px solid #BFDCE8" }}
               >
-                Since 2025, FIVB rules let the serving team stand anywhere on court at the serve — only the
-                receiving team must hold rotational order. Who serves next, and who's front/back row, doesn't change.
+                <button
+                  className="zone-btn w-full flex items-center justify-between gap-2 px-3 py-2 font-bold uppercase"
+                  style={{ letterSpacing: "0.04em" }}
+                  onClick={() => setShowFivbNote((v) => !v)}
+                  aria-expanded={showFivbNote}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Info size={14} /> FIVB serving rule
+                  </span>
+                  <ChevronDown
+                    size={14}
+                    style={{
+                      transition: "transform 0.2s ease",
+                      transform: showFivbNote ? "rotate(180deg)" : "rotate(0deg)",
+                    }}
+                  />
+                </button>
+                {showFivbNote && (
+                  <p className="px-3 pb-2 -mt-0.5">
+                    Since 2025, FIVB rules let the serving team stand anywhere on court at the serve — only the
+                    receiving team must hold rotational order. Who serves next, and who's front/back row, doesn't
+                    change.
+                  </p>
+                )}
               </div>
             )}
 
