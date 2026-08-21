@@ -8,6 +8,10 @@ services:
     # Map the host photos directory into the container so uploads persist
     volumes:
       - /srv/photos:${PHOTO_DIR:-/srv/photos}
+      # Bind-mounts the one file served by the /dl/<DOWNLOAD_TOKEN> route
+      # (read-only) at a fixed in-container path. DOWNLOAD_FILE_PATH below is
+      # intentionally the container-side path, not the host path from .env.
+      - /home/asgerkrabbe/files/avatar.zip:/downloads/avatar.zip:ro
     ports:
       - "127.0.0.1:3000:3000"
     environment:
@@ -19,3 +23,7 @@ services:
       - UPLOAD_TOKEN=${UPLOAD_TOKEN}
       - PORT=3000
       - MAX_FILE_BYTES=20971520
+      # Unguessable-URL download route (see server.js). Unset DOWNLOAD_TOKEN
+      # in .env to disable the route entirely.
+      - DOWNLOAD_TOKEN=${DOWNLOAD_TOKEN}
+      - DOWNLOAD_FILE_PATH=/downloads/avatar.zip
