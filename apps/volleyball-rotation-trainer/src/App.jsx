@@ -377,6 +377,9 @@ export default function VolleyballRotationTrainer() {
                 getDisplayPosition(quizMap, question.targetRole, question.serving) === pos;
               const revealRole = mode === "quiz" && question.feedback ? quizDisplayMap[pos] : null;
               const revealMeta = revealRole ? ROLE_META[revealRole] : null;
+              // The server is whoever is LITERALLY in position 1 — not whichever
+              // role's base-defense column happens to display at zone 1.
+              const revealIsServer = revealRole !== null && findPositionForRole(quizMap, revealRole) === 1;
 
               return (
                 <div
@@ -411,7 +414,7 @@ export default function VolleyballRotationTrainer() {
                     <span className="absolute top-1 left-1 text-xs font-bold" style={{ color: "#A8763D" }}>
                       {pos}
                     </span>
-                    {pos === 1 && (
+                    {revealIsServer && (
                       <span className="absolute top-1 right-1 text-xs font-bold" style={{ color: "#C43D3D" }}>
                         SERVE
                       </span>
@@ -445,6 +448,9 @@ export default function VolleyballRotationTrainer() {
                 const topPct = zone.row * 50 + 25;
                 const isLibero = role === liberoSubRole;
                 const meta = isLibero ? ROLE_META.L : ROLE_META[role];
+                // The server is whoever is LITERALLY in position 1 — track that
+                // regardless of where this role's base-defense column displays it.
+                const isServer = findPositionForRole(learnMap, role) === 1;
                 return (
                   <div
                     key={role}
@@ -457,6 +463,14 @@ export default function VolleyballRotationTrainer() {
                       zIndex: 2,
                     }}
                   >
+                    {isServer && (
+                      <span
+                        className="font-bold uppercase px-1.5 py-0.5 rounded mb-1"
+                        style={{ backgroundColor: "#C43D3D", color: "#FFFFFF", fontSize: "9px", letterSpacing: "0.05em" }}
+                      >
+                        Serve
+                      </span>
+                    )}
                     <span
                       className="badge-pop px-3 py-1 rounded-full font-extrabold text-sm"
                       key={isLibero ? "L" : role}
